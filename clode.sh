@@ -185,3 +185,39 @@ _clode_stop() {
   docker stop "$name" >/dev/null && docker rm "$name" >/dev/null 2>&1 || true
   echo "clode: stopped '$name'"
 }
+
+_clode_list() {
+  _clode_load_config
+
+  if [[ ! -d "$CLODE_WORKSPACE" ]]; then
+    echo "clode: workspace '$CLODE_WORKSPACE' not found." >&2
+    return 1
+  fi
+
+  # Build a map of workspace_path -> container_name from running containers
+  declare -A running_map
+  while IFS='|' read -r cname wspath; do
+    [[ -n "$wspath" ]] && running_map["$wspath"]="$cname"
+  done < <(docker ps --filter "label=clode.workspace" \
+    --format '{{.Names}}|{{.Label "clode.workspace"}}' 2>/dev/null)
+
+  printf "%-30s %-20s %s\n" "PROJECT" "CONTAINER" "STATUS"
+  printf "%-30s %-20s %s\n" "-------" "---------" "------"
+
+  for dir in "$CLODE_WORKSPACE"/*/; do
+    [[ -d "$dir" ]] || continue
+    local project
+    project=$(basename "$dir")
+    local abspath
+    abspath=$(cd "$dir" && pwd)
+    local cname="${running_map[$abspath]:-}"
+
+    if [[ -n "$cname" ]]; then
+      local status
+      status=$(docker inspect --format '{{.State.Status}}' "$cname" 2>/dev/null || echo "unknown")
+      printf "%-30s %-20s %s\n" "$project" "$cname" "$status"
+    else
+      printf "%-30s %-20s %s\n" "$project" "-" "stopped"
+    fi
+  done
+}

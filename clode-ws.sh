@@ -365,7 +365,7 @@ _cws_add_worktree() {
   fi
 
   mkdir -p "${project_dir}/.worktrees"
-  if \! git -C "$project_dir" worktree add "$worktree_path" -b "$branch" 2>&1; then
+  if ! git -C "$project_dir" worktree add "$worktree_path" -b "$branch" 2>&1; then
     echo "git worktree add failed — see error above." >&2
     return 1
   fi

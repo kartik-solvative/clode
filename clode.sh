@@ -54,6 +54,9 @@ _clode_base_args() {
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'
+  # Shared clipboard directory: 'cpaste' on Mac writes here; Claude reads /tmp/clode-clipboard inside Docker
+  mkdir -p "$HOME/.clode/clipboard" 2>/dev/null || true
+  printf -- '-v\n%s:/tmp/clode-clipboard\n' "$HOME/.clode/clipboard"
   printf -- '-v\n%s:/workspace\n' "$(pwd)"
   printf -- '--name\n%s\n' "$name"
   printf -- '--label\nclode.workspace=%s\n' "$(pwd)"
@@ -127,6 +130,11 @@ PORTS
   host ports. Claude receives CLODE_PORT_<n>=<host_port> env vars so it
   knows the host-side URL. Run 'clode list' to see current mappings.
   Use -p to add extra ports beyond CLODE_EXPOSE_PORTS.
+
+CLIPBOARD (images)
+  cpaste                       Save macOS clipboard image → /tmp/clode-clipboard/
+                               Claude inside Docker can read it there.
+                               Tip: brew install pngpaste (optional, faster)
 
 EXAMPLES
   clode                        Start or attach (smart default)
@@ -340,4 +348,46 @@ clode() {
       fi
       ;;
   esac
+}
+
+# ── cpaste — clipboard image bridge ───────────────────────
+# Saves the macOS clipboard image to ~/.clode/clipboard/
+# so Claude running inside Docker can read it at /tmp/clode-clipboard/
+cpaste() {
+  local dir="$HOME/.clode/clipboard"
+  mkdir -p "$dir"
+  local timestamp
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  local file="$dir/clipboard_${timestamp}.png"
+  local latest="$dir/clipboard.png"
+
+  # Try pngpaste first (brew install pngpaste — fast, no AppleScript overhead)
+  if command -v pngpaste >/dev/null 2>&1; then
+    if pngpaste "$file" 2>/dev/null; then
+      cp "$file" "$latest"
+      echo "cpaste: saved to /tmp/clode-clipboard/clipboard_${timestamp}.png"
+      echo "        (also available as /tmp/clode-clipboard/clipboard.png)"
+      return 0
+    fi
+    echo "cpaste: no image in clipboard" >&2
+    return 1
+  fi
+
+  # Fall back to osascript (no extra install required)
+  if osascript 2>/dev/null <<APPLESCRIPT
+    set imgData to (the clipboard as «class PNGf»)
+    set f to open for access POSIX file "$file" with write permission
+    write imgData to f
+    close access f
+APPLESCRIPT
+  then
+    cp "$file" "$latest"
+    echo "cpaste: saved to /tmp/clode-clipboard/clipboard_${timestamp}.png"
+    echo "        (also available as /tmp/clode-clipboard/clipboard.png)"
+    echo "        Tip: brew install pngpaste for faster clipboard reads"
+    return 0
+  fi
+
+  echo "cpaste: no image in clipboard (or clipboard contains non-image data)" >&2
+  return 1
 }

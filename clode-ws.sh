@@ -247,3 +247,18 @@ _cws_cmd_prune() {
   echo "$containers" | xargs docker rm 2>/dev/null || true
   echo "Done."
 }
+
+_cws_new_host_terminal() {
+  local project="$1" slug="$2"
+  local session
+  session=$(_cws_session_name "$project")
+  local n
+  n=$(_cws_next_n "$session" "$slug" "host")
+  local wname
+  wname=$(_cws_window_name "$slug" "host" "$n")
+  local worktree_dir
+  worktree_dir=$(_cws_worktree_dir "$project" "$slug")
+
+  tmux new-window -t "$session" -n "$wname" -c "$worktree_dir"
+  _cws_goto "$session" "$wname"
+}

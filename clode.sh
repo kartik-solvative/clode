@@ -9,6 +9,7 @@ _clode_load_config() {
   CLODE_IMAGE="${CLODE_IMAGE:-claude-code:latest}"
   CLODE_IDLE_TIMEOUT="${CLODE_IDLE_TIMEOUT:-3600}"
   CLODE_WORKSPACE="${CLODE_WORKSPACE:-$HOME/Projects}"
+  CLODE_EXPOSE_PORTS="${CLODE_EXPOSE_PORTS:-3000,5173,8080,8888}"
 }
 
 # ── Env var injection ─────────────────────────────────────
@@ -63,6 +64,33 @@ _clode_name()       { basename "$(pwd)"; }
 _clode_is_running() { docker ps -q --filter "name=^${1}$" 2>/dev/null | grep -q .; }
 _clode_exists()     { docker ps -aq --filter "name=^${1}$" 2>/dev/null | grep -q .; }
 
+# Ask the OS for a free ephemeral port.
+_clode_free_port() {
+  python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)"
+}
+
+# Populate globals from CLODE_EXPOSE_PORTS:
+#   _CLODE_PORT_ARGS   — docker -p host:container pairs
+#   _CLODE_PORT_EXTRA  — -e CLODE_PORT_<n>=<host> and --label clode.port.<n>=<host>
+#   _CLODE_PORT_LINES  — human-readable summary lines
+_clode_build_port_args() {
+  _CLODE_PORT_ARGS=()
+  _CLODE_PORT_EXTRA=()
+  _CLODE_PORT_LINES=()
+  [[ -z "${CLODE_EXPOSE_PORTS:-}" ]] && return
+  local IFS=','
+  for cport in $CLODE_EXPOSE_PORTS; do
+    cport="${cport// /}"
+    [[ -z "$cport" ]] && continue
+    local hport
+    hport=$(_clode_free_port)
+    _CLODE_PORT_ARGS+=("-p" "${hport}:${cport}")
+    _CLODE_PORT_EXTRA+=("-e" "CLODE_PORT_${cport}=${hport}")
+    _CLODE_PORT_EXTRA+=("--label" "clode.port.${cport}=${hport}")
+    _CLODE_PORT_LINES+=("  http://localhost:${hport}  →  container port ${cport}")
+  done
+}
+
 _clode_help() {
   cat <<'EOF'
 clode — Claude Code in Docker
@@ -91,11 +119,17 @@ ENVIRONMENT FILES
   ~/.clode.env    Global env vars — always injected
   ./.env          Project env vars — injected if present
 
+PORTS
+  Ports in CLODE_EXPOSE_PORTS are auto-forwarded at startup with dynamic
+  host ports. Claude receives CLODE_PORT_<n>=<host_port> env vars so it
+  knows the host-side URL. Run 'clode list' to see current mappings.
+  Use -p to add extra ports beyond CLODE_EXPOSE_PORTS.
+
 EXAMPLES
   clode                        Start or attach (smart default)
   clode start                  Explicitly start new session
   clode start --bg "fix tests"      Run task in background
-  clode -p 3000:3000 -p 5173:5173   Expose ports to host
+  clode -p 9000:9000                Add an extra port this session
   clode attach                 Attach to running session
   clode stop                   Stop current project's container
   clode list                   Show all projects and status
@@ -130,11 +164,15 @@ _clode_start() {
   local -a claude_flags=("--dangerously-skip-permissions")
   [[ $resume -eq 1 ]] && claude_flags+=("--resume")
 
+  _clode_build_port_args
   mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
+  # Combine: base args + auto port mappings + port env/labels + manual -p overrides
+  local -a all_args=("${_args[@]}" "${_CLODE_PORT_ARGS[@]}" "${_CLODE_PORT_EXTRA[@]}" "${ports[@]}")
 
   if [[ $bg -eq 1 ]]; then
-    docker run -d "${_args[@]}" "${ports[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+    docker run -d "${all_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
     echo "clode: started '$name' in background"
+    for line in "${_CLODE_PORT_LINES[@]}"; do echo "$line"; done
 
     # Idle timeout watcher
     if [[ "${CLODE_IDLE_TIMEOUT:-0}" -gt 0 ]]; then
@@ -159,7 +197,8 @@ _clode_start() {
     fi
   else
     echo "clode: starting '$name'"
-    docker run -it "${_args[@]}" "${ports[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+    for line in "${_CLODE_PORT_LINES[@]}"; do echo "$line"; done
+    docker run -it "${all_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
   fi
 }
 
@@ -220,6 +259,14 @@ _clode_list() {
       local status
       status=$(docker inspect --format '{{.State.Status}}' "$cname" 2>/dev/null || echo "unknown")
       printf "%-30s %-20s %s\n" "$project" "$cname" "$status"
+      # Show port mappings from labels (clode.port.<container>=<host>)
+      while IFS='=' read -r key hport; do
+        [[ "$key" == clode.port.* ]] || continue
+        local cport="${key#clode.port.}"
+        printf "  %-28s http://localhost:%-8s → container:%-s\n" "" "$hport" "$cport"
+      done < <(docker inspect --format \
+        '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
+        "$cname" 2>/dev/null | grep '^clode\.port\.')
     else
       printf "%-30s %-20s %s\n" "$project" "-" "stopped"
     fi

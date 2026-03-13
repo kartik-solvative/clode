@@ -14,6 +14,7 @@ _save_config() {
 CLODE_WORKSPACE="${CLODE_WORKSPACE}"
 CLODE_IMAGE="${CLODE_IMAGE:-claude-code:latest}"
 CLODE_IDLE_TIMEOUT="${CLODE_IDLE_TIMEOUT:-3600}"
+CLODE_EXPOSE_PORTS="${CLODE_EXPOSE_PORTS:-3000,5173,8080,8888}"
 EOF
 }
 
@@ -43,9 +44,10 @@ main() {
 
   if [[ -f "$CONFIG" && $reconfigure -eq 0 ]]; then
     echo "clode is already installed."
-    echo "  Workspace : ${CLODE_WORKSPACE}"
-    echo "  Image     : ${CLODE_IMAGE:-claude-code:latest}"
-    echo "  Idle timeout: ${CLODE_IDLE_TIMEOUT:-3600}s"
+    echo "  Workspace    : ${CLODE_WORKSPACE}"
+    echo "  Image        : ${CLODE_IMAGE:-claude-code:latest}"
+    echo "  Idle timeout : ${CLODE_IDLE_TIMEOUT:-3600}s"
+    echo "  Expose ports : ${CLODE_EXPOSE_PORTS:-3000,5173,8080,8888}"
     echo ""
     echo "Run with --reconfigure to change settings."
     _add_to_shell
@@ -56,6 +58,7 @@ main() {
   _ask "Projects workspace directory" "${CLODE_WORKSPACE:-$HOME/Projects}" CLODE_WORKSPACE
   _ask "Docker image" "${CLODE_IMAGE:-claude-code:latest}" CLODE_IMAGE
   _ask "Idle timeout in seconds (0 to disable)" "${CLODE_IDLE_TIMEOUT:-3600}" CLODE_IDLE_TIMEOUT
+  _ask "Container ports to auto-forward (comma-separated)" "${CLODE_EXPOSE_PORTS:-3000,5173,8080,8888}" CLODE_EXPOSE_PORTS
 
   # Expand ~ in workspace path
   CLODE_WORKSPACE="${CLODE_WORKSPACE/#\~/$HOME}"

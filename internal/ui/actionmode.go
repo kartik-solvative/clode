@@ -70,13 +70,16 @@ func updateActionModeKey(m Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Actions wired in Task 9
 		case 'w':
 			m.mode = modePrompt
-			// Prompt wired in Task 7
+			m.prompt = newTextPrompt("branch:", nil)
 		case 'd':
 			m.mode = modePrompt
+			m.prompt = newConfirmPrompt("delete terminal? y/N", nil)
 		case 'D':
 			m.mode = modePrompt
+			m.prompt = newConfirmPrompt("delete worktree? y/N", nil)
 		case 'X':
 			m.mode = modePrompt
+			m.prompt = newConfirmPrompt("kill project? y/N", nil)
 		case 'f':
 			m.mode = modeNormal
 			// Fg action wired in Task 9

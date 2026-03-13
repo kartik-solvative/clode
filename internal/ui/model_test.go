@@ -214,6 +214,94 @@ func TestActionModeContextKeys_RunningTerminalSelected(t *testing.T) {
 	}
 }
 
+func navigateToRunningTerminal(t *testing.T, m ui.Model) ui.Model {
+	t.Helper()
+	var next tea.Model
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	return next.(ui.Model)
+}
+
+func TestTextPromptAcceptsInput(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("w")})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModePrompt {
+		t.Fatalf("want ModePrompt after 'w', got %v", m.Mode())
+	}
+	for _, c := range "feature-login" {
+		next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}})
+		m = next.(ui.Model)
+	}
+	if m.PromptValue() != "feature-login" {
+		t.Errorf("want PromptValue 'feature-login', got %q", m.PromptValue())
+	}
+}
+
+func TestTextPromptEnterConfirms(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("w")})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("feat")})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after Enter on non-empty prompt, got %v", m.Mode())
+	}
+}
+
+func TestTextPromptEscCancels(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("w")})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after Esc on prompt, got %v", m.Mode())
+	}
+}
+
+func TestConfirmPromptYes(t *testing.T) {
+	m := navigateToRunningTerminal(t, ui.New(twoProjectState()))
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModePrompt {
+		t.Fatalf("want ModePrompt after 'd', got %v", m.Mode())
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after 'y' confirm, got %v", m.Mode())
+	}
+}
+
+func TestConfirmPromptNo(t *testing.T) {
+	m := navigateToRunningTerminal(t, ui.New(twoProjectState()))
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("N")})
+	m = next.(ui.Model)
+	if m.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after 'N' cancel, got %v", m.Mode())
+	}
+}
+
 func TestActionModeContextKeys_DetachedTerminalSelected(t *testing.T) {
 	st := &state.State{
 		Projects: []state.Project{{

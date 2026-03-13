@@ -51,6 +51,7 @@ type Model struct {
 	actionKey         byte
 	expandedProjects  map[string]bool
 	expandedWorktrees map[string]bool
+	prompt            *promptModel
 }
 
 // New creates a Model from the given state. All nodes start collapsed.
@@ -72,6 +73,15 @@ func New(st *state.State) Model {
 // Exported mode constants for tests.
 const ModeNormal = modeNormal
 const ModeAction = modeAction
+const ModePrompt = modePrompt
+
+// PromptValue returns the current text value of the active prompt, or "" if none.
+func (m Model) PromptValue() string {
+	if m.prompt == nil {
+		return ""
+	}
+	return m.prompt.value
+}
 
 // Cursor returns the current cursor position (for tests).
 func (m Model) Cursor() int { return m.cursor }
@@ -114,6 +124,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.mode == modeAction {
 			return updateActionModeKey(m, msg)
+		}
+		if m.mode == modePrompt {
+			return m.updatePrompt(msg)
 		}
 		return m.dispatchKey(msg)
 	}
@@ -171,6 +184,17 @@ func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.mode = modePalette
 			}
 		}
+	}
+	return m, nil
+}
+
+// updatePrompt handles key events when a prompt is active.
+func (m Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	done, cmd := m.prompt.update(msg)
+	if done {
+		m.mode = modeNormal
+		m.prompt = nil
+		return m, cmd
 	}
 	return m, nil
 }

@@ -78,3 +78,17 @@ setup() {
   result="$(_cws_next_n "cws-test" "main" "host")"
   [ "$result" = "2" ]
 }
+
+@test "_cws_projects: only lists git repos" {
+  # Create a temp dir with one git repo and one plain dir
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  mkdir -p "$tmpdir/myrepo/.git" "$tmpdir/notgit"
+
+  # Override the projects dir for this test
+  _CLODE_WS_PROJECTS_DIR="$tmpdir"
+  result="$(_cws_projects)"
+
+  [ "$result" = "myrepo" ]
+  rm -rf "$tmpdir"
+}

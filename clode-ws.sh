@@ -94,3 +94,11 @@ _cws_goto() {
     tmux attach-session -t "$session"
   fi
 }
+
+# List all git repo names under the projects directory, alphabetically.
+_cws_projects() {
+  for dir in "${_CLODE_WS_PROJECTS_DIR}"/*/; do
+    [[ -d "${dir}.git" ]] || continue
+    basename "$dir"
+  done | sort
+}

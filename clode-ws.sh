@@ -500,3 +500,62 @@ _cws_navigate_worktree() {
   [[ -z "$choice" ]] && return 0
   echo "$choice"
 }
+
+_cws_navigate_terminal() {
+  local project="$1" slug="$2"
+  local session
+  session=$(_cws_session_name "$project")
+  local container
+  container=$(_cws_container_name "$project" "$slug")
+
+  local options=()
+
+  # Existing tmux windows for this worktree
+  while IFS= read -r wname; do
+    [[ -z "$wname" ]] && continue
+    options+=("● $wname")
+  done < <(_cws_windows "$session" "$slug")
+
+  # Detached clode container: running in Docker but no tmux window for this worktree
+  # Exact name match — docker --filter name= is substring-only, so post-filter with grep
+  if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${container}$"; then
+    if ! _cws_windows "$session" "$slug" | grep -q ":clode-"; then
+      options+=("◎ ${slug}:clode [detached] — fg to reattach")
+    fi
+  fi
+
+  options+=("+ new host terminal")
+  options+=("+ new clode terminal")
+  options+=("+ new worktree")
+  [[ "$slug" != "main" ]] && options+=("+ delete worktree")
+
+  local choice
+  choice=$(printf '%s\n' "${options[@]}" | fzf \
+    --height=60% --border \
+    --prompt="${project}/${slug} > " \
+    --header="select terminal or action") || return 0
+
+  [[ -z "$choice" ]] && return 0
+
+  case "$choice" in
+    "● "*)
+      local wname="${choice#● }"
+      _cws_goto "$session" "$wname"
+      ;;
+    "◎ "*"[detached]"*)
+      _cws_fg_clode "$project" "$slug"
+      ;;
+    "+ new host terminal")
+      _cws_new_host_terminal "$project" "$slug"
+      ;;
+    "+ new clode terminal")
+      _cws_new_clode_terminal "$project" "$slug"
+      ;;
+    "+ new worktree")
+      _cws_add_worktree "$project"
+      ;;
+    "+ delete worktree")
+      _cws_delete_worktree "$project" "$slug"
+      ;;
+  esac
+}

@@ -50,6 +50,12 @@ _clode_base_args() {
   printf -- '-v %s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
   printf -- '-v %s:%s\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
   printf -- '-v %s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
+  # Mount Nod bridge so Claude Code hooks work inside the container
+  local nod_bridge="$_CLODE_HOME/Library/Application Support/Nod/nod-bridge"
+  if [[ -f "$nod_bridge" ]]; then
+    printf -- '-v %s:%s:ro\n' "$nod_bridge" "$nod_bridge"
+    printf -- '-e NOD_HOST=host.docker.internal\n'
+  fi
   printf -- '-v %s:/workspace\n' "$(pwd)"
   printf -- '--name %s\n' "$name"
   printf -- '--label clode.workspace=%s\n' "$(pwd)"

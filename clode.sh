@@ -101,3 +101,60 @@ EXAMPLES
   clode update --reconfigure   Update + change settings
 EOF
 }
+
+_clode_start() {
+  _clode_load_config
+  local name
+  name=$(_clode_name)
+  local bg=0 resume=0 memory="4g" cpus="2"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --bg)       bg=1;        shift ;;
+      --resume)   resume=1;    shift ;;
+      --memory)   memory="$2"; shift 2 ;;
+      --cpus)     cpus="$2";   shift 2 ;;
+      *)          break ;;
+    esac
+  done
+
+  if _clode_exists "$name"; then
+    echo "clode: container '$name' already exists — use 'clode attach' or 'clode stop' first." >&2
+    return 1
+  fi
+
+  local claude_flags="--dangerously-skip-permissions"
+  [[ $resume -eq 1 ]] && claude_flags="$claude_flags --resume"
+
+  mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
+
+  if [[ $bg -eq 1 ]]; then
+    docker run -d "${_args[@]}" "$CLODE_IMAGE" $claude_flags "$@"
+    echo "clode: started '$name' in background"
+
+    # Idle timeout watcher
+    if [[ "${CLODE_IDLE_TIMEOUT:-0}" -gt 0 ]]; then
+      (
+        sleep "$CLODE_IDLE_TIMEOUT"
+        if _clode_is_running "$name"; then
+          docker stop "$name" >/dev/null 2>&1 && \
+            echo "clode: '$name' stopped after idle timeout (${CLODE_IDLE_TIMEOUT}s)"
+        fi
+      ) &
+      disown
+    fi
+
+    # ntfy notification
+    if [[ -n "${NTFY_TOPIC:-}" ]]; then
+      (docker wait "$name" >/dev/null 2>&1 && \
+        curl -s -o /dev/null "https://ntfy.sh/${NTFY_TOPIC}" \
+          -H "Title: clode done" \
+          -H "Tags: white_check_mark" \
+          -d "$name finished") &
+      disown
+    fi
+  else
+    echo "clode: starting '$name'"
+    docker run -it "${_args[@]}" "$CLODE_IMAGE" $claude_flags "$@"
+  fi
+}

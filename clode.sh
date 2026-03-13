@@ -20,7 +20,7 @@ _clode_env_file_args() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" || "$line" == \#* ]] && continue
     if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-      printf -- '-e %q\n' "$line"
+      printf -- '-e\n%s\n' "$line"
     fi
   done < "$file"
 }
@@ -31,10 +31,16 @@ _clode_all_env_args() {
 }
 
 # ── Base docker args ──────────────────────────────────────
+# Outputs one docker-arg token per line. Callers MUST consume with mapfile:
+#   mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
+#   docker run "${_args[@]}" ...
+# Do NOT use: eval docker run $(_clode_base_args ...) — word-splitting will corrupt paths with spaces.
 _clode_base_args() {
   local name="$1"
   local memory="${2:-4g}"
   local cpus="${3:-2}"
+  # Ensure ~/.claude.json exists as a file (Docker would create a dir if missing)
+  touch "$_CLODE_HOME/.claude.json" 2>/dev/null || true
   printf -- '--rm\n'
   printf -- '-u %s\n' "$(id -u):$(id -g)"
   printf -- '-e HOME=%s\n' "$_CLODE_HOME"

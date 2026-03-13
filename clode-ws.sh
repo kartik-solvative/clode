@@ -144,3 +144,40 @@ _cws_cmd_list() {
     echo "$windows"
   done <<< "$sessions"
 }
+
+# Create a new clode-ws session for a project with interactive worktree/terminal picker.
+_cws_cmd_new() {
+  local project="$1"
+  if [[ -z "$project" ]]; then
+    echo "Usage: clode-ws new <project>" >&2
+    return 1
+  fi
+
+  local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
+  if [[ ! -d "$project_dir" ]]; then
+    echo "Error: $project_dir does not exist." >&2
+    return 1
+  fi
+  if [[ ! -d "${project_dir}/.git" ]]; then
+    echo "Error: $project_dir is not a git repository." >&2
+    return 1
+  fi
+
+  local session
+  session=$(_cws_session_name "$project")
+
+  if _cws_session_exists "$project"; then
+    echo "Session $session already exists — attaching."
+  else
+    tmux new-session -d -s "$session" -c "$project_dir"
+    # Rename the default window to main:host-1
+    tmux rename-window -t "${session}:1" "main:host-1"
+    echo "Created session: $session"
+  fi
+
+  # Open navigator: worktree picker → terminal picker
+  local slug
+  slug=$(_cws_navigate_worktree "$project") || return 0
+  [[ -z "$slug" ]] && return 0
+  _cws_navigate_terminal "$project" "$slug"
+}

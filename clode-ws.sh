@@ -102,3 +102,27 @@ _cws_projects() {
     basename "$dir"
   done | sort
 }
+
+# List worktree slugs for a project. "main" is always printed first,
+# then remaining worktrees in git-reported order.
+_cws_worktrees() {
+  local project="$1"
+  local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
+  local project_dir_real
+  # Resolve symlinks in the project directory path
+  project_dir_real=$(realpath "$project_dir" 2>/dev/null) || project_dir_real="$project_dir"
+
+  # Always emit main first — do not rely on git's output order
+  echo "main"
+
+  git -C "$project_dir" worktree list --porcelain 2>/dev/null \
+    | grep "^worktree " \
+    | awk '{print $2}' \
+    | while IFS= read -r path; do
+        # Skip the main worktree — already printed above
+        [[ "$path" == "$project_dir_real" ]] && continue
+        # Extract relative path from project root
+        local rel="${path#${project_dir_real}/}"
+        _cws_slugify "$rel"
+      done
+}

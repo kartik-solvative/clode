@@ -92,3 +92,55 @@ setup() {
   [ "$result" = "myrepo" ]
   rm -rf "$tmpdir"
 }
+
+# Helper: create a temp git repo with a worktree for tests in this chunk
+_make_test_repo() {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  git -C "$tmpdir" init -q
+  git -C "$tmpdir" config user.email "test@test.com"
+  git -C "$tmpdir" config user.name "Test"
+  git -C "$tmpdir" commit --allow-empty -m "init" -q
+  mkdir -p "$tmpdir/.worktrees"
+  git -C "$tmpdir" worktree add "$tmpdir/.worktrees/feature-auth" -b "feature-auth" -q
+  echo "$tmpdir"
+}
+
+@test "_cws_worktrees: lists main first" {
+  local tmpdir
+  tmpdir="$(_make_test_repo)"
+  _CLODE_WS_PROJECTS_DIR="$(dirname "$tmpdir")"
+  local project
+  project=$(basename "$tmpdir")
+
+  local first
+  first=$(_cws_worktrees "$project" | head -1)
+  [ "$first" = "main" ]
+  rm -rf "$tmpdir"
+}
+
+@test "_cws_worktrees: lists slugified worktree" {
+  local tmpdir
+  tmpdir="$(_make_test_repo)"
+  _CLODE_WS_PROJECTS_DIR="$(dirname "$tmpdir")"
+  local project
+  project=$(basename "$tmpdir")
+
+  _cws_worktrees "$project" | grep -q "^feature-auth$"
+  rm -rf "$tmpdir"
+}
+
+@test "_cws_worktrees and _cws_worktree_dir round-trip: all slugs resolve to existing dirs" {
+  local tmpdir
+  tmpdir="$(_make_test_repo)"
+  _CLODE_WS_PROJECTS_DIR="$(dirname "$tmpdir")"
+  local project
+  project=$(basename "$tmpdir")
+
+  while IFS= read -r slug; do
+    local dir
+    dir="$(_cws_worktree_dir "$project" "$slug")"
+    [ -d "$dir" ] || { echo "Dir not found for slug '$slug': $dir"; return 1; }
+  done < <(_cws_worktrees "$project")
+  rm -rf "$tmpdir"
+}

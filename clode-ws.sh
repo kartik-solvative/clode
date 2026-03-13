@@ -126,3 +126,21 @@ _cws_worktrees() {
         _cws_slugify "$rel"
       done
 }
+
+# List active clode-ws sessions and their windows.
+_cws_cmd_list() {
+  local sessions
+  sessions=$(_cws_sessions)
+  if [[ -z "$sessions" ]]; then
+    echo "No active clode-ws sessions."
+    return 0
+  fi
+  echo "Active clode-ws sessions:"
+  while IFS= read -r session; do
+    local project="${session#cws-}"
+    local windows
+    windows=$(tmux list-windows -t "$session" -F "  #{window_index}: #{window_name}" 2>/dev/null)
+    echo "● $project"
+    echo "$windows"
+  done <<< "$sessions"
+}

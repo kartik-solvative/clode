@@ -45,18 +45,18 @@ _clode_base_args() {
   touch "$_CLODE_HOME/.claude.json" 2>/dev/null || true
   printf -- '--rm\n'
   printf -- '-u\n%s\n' "$(id -u):$(id -g)"
-  printf -- '-e HOME=%s\n' "$_CLODE_HOME"
-  printf -- '-e CLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+  printf -- '-e\nHOME=%s\n' "$_CLODE_HOME"
+  printf -- '-e\nCLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
   _clode_all_env_args
-  printf -- '-v %s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
-  printf -- '-v %s:%s\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
-  printf -- '-v %s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
+  printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
+  printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
+  printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
-  printf -- '-e NOD_HOST=host.docker.internal\n'
-  printf -- '-v %s:/workspace\n' "$(pwd)"
-  printf -- '--name %s\n' "$name"
-  printf -- '--label clode.workspace=%s\n' "$(pwd)"
+  printf -- '-e\nNOD_HOST=host.docker.internal\n'
+  printf -- '-v\n%s:/workspace\n' "$(pwd)"
+  printf -- '--name\n%s\n' "$name"
+  printf -- '--label\nclode.workspace=%s\n' "$(pwd)"
   printf -- '--security-opt=no-new-privileges\n'
   printf -- '--cap-drop=ALL\n'
   printf -- '--memory=%s\n' "$memory"

@@ -29,6 +29,7 @@ func newPaletteModel(actions []ActionKey) *paletteModel {
 	for _, a := range actions {
 		entries = append(entries, paletteEntry{
 			Name:     a.Label,
+			Scope:    a.Scope,
 			Shortcut: "Ctrl+A " + a.Key,
 		})
 	}
@@ -113,6 +114,9 @@ func renderPaletteOverlay(p *paletteModel, width int) string {
 	filtered := p.filtered()
 	for i, entry := range filtered {
 		line := entry.Name
+		if entry.Scope != "" {
+			line = line + "  " + stylePaletteShortcut.Render(entry.Scope)
+		}
 		if entry.Shortcut != "" {
 			line = line + "  " + stylePaletteShortcut.Render(entry.Shortcut)
 		}

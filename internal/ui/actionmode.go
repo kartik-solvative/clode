@@ -17,28 +17,31 @@ func contextActions(m Model) []ActionKey {
 
 	switch n.kind {
 	case nodeProject:
+		scope := n.project
 		return []ActionKey{
-			{Key: "n", Label: "new host terminal"},
-			{Key: "c", Label: "new clode terminal"},
-			{Key: "w", Label: "new worktree"},
-			{Key: "X", Label: "kill project"},
+			{Key: "n", Label: "new host terminal", Scope: scope},
+			{Key: "c", Label: "new clode terminal", Scope: scope},
+			{Key: "w", Label: "new worktree", Scope: scope},
+			{Key: "X", Label: "kill project", Scope: scope},
 		}
 	case nodeWorktree:
+		scope := n.project + " · " + n.worktree
 		return []ActionKey{
-			{Key: "n", Label: "new host terminal"},
-			{Key: "c", Label: "new clode terminal"},
-			{Key: "w", Label: "new worktree"},
-			{Key: "D", Label: "delete worktree"},
-			{Key: "X", Label: "kill project"},
+			{Key: "n", Label: "new host terminal", Scope: scope},
+			{Key: "c", Label: "new clode terminal", Scope: scope},
+			{Key: "w", Label: "new worktree", Scope: scope},
+			{Key: "D", Label: "delete worktree", Scope: scope},
+			{Key: "X", Label: "kill project", Scope: scope},
 		}
 	case nodeTerminal:
+		scope := n.project + " · " + n.worktree
 		keys := []ActionKey{
-			{Key: "d", Label: "delete terminal"},
-			{Key: "D", Label: "delete worktree"},
-			{Key: "X", Label: "kill project"},
+			{Key: "d", Label: "delete terminal", Scope: scope},
+			{Key: "D", Label: "delete worktree", Scope: scope},
+			{Key: "X", Label: "kill project", Scope: scope},
 		}
 		if n.terminal != nil && n.terminal.Status == state.StatusDetached && n.terminal.Type == state.TypeClode {
-			keys = append([]ActionKey{{Key: "f", Label: "fg (reattach)"}}, keys...)
+			keys = append([]ActionKey{{Key: "f", Label: "fg (reattach)", Scope: scope}}, keys...)
 		}
 		return keys
 	}

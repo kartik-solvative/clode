@@ -109,7 +109,7 @@ func (m Model) VisibleCount() int { return len(m.nodes) }
 func (m Model) Mode() viewMode { return m.mode }
 
 // ActionKey is one entry in the action mode overlay.
-type ActionKey struct{ Key, Label string }
+type ActionKey struct{ Key, Label, Scope string }
 
 // ActionModeKeys returns context-sensitive keys for the current node.
 func (m Model) ActionModeKeys() []ActionKey { return contextActions(m) }

@@ -20,7 +20,7 @@ EOF
 _ask() {
   local prompt="$1" default="$2" var="$3"
   read -rp "${prompt} [${default}]: " input
-  eval "${var}=\"${input:-${default}}\""
+  printf -v "$var" '%s' "${input:-${default}}"
 }
 
 _add_to_shell() {
@@ -59,6 +59,16 @@ main() {
 
   # Expand ~ in workspace path
   CLODE_WORKSPACE="${CLODE_WORKSPACE/#\~/$HOME}"
+
+  if [[ ! -d "$CLODE_WORKSPACE" ]]; then
+    echo "Warning: workspace directory does not exist: $CLODE_WORKSPACE"
+    echo "         Create it before using clode."
+  fi
+
+  if ! [[ "$CLODE_IDLE_TIMEOUT" =~ ^[0-9]+$ ]]; then
+    echo "Error: idle timeout must be a non-negative integer." >&2
+    return 1
+  fi
 
   _save_config
   _add_to_shell

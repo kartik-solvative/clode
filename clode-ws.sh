@@ -468,3 +468,35 @@ _cws_navigate_project() {
 
   echo "$project"
 }
+
+_cws_navigate_worktree() {
+  local project="$1"
+  local session
+  session=$(_cws_session_name "$project")
+
+  # Auto-create session if it doesn't exist
+  if ! _cws_session_exists "$project"; then
+    local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
+    tmux new-session -d -s "$session" -c "$project_dir"
+    tmux rename-window -t "${session}:1" "main:host-1"
+    # Must go to stderr — this function is called in $() subshell, stdout is the return value
+    echo "Created session: $session" >&2
+  fi
+
+  local worktrees
+  worktrees=$(_cws_worktrees "$project")
+
+  if [[ -z "$worktrees" ]]; then
+    echo "No worktrees found for $project" >&2
+    return 1
+  fi
+
+  local choice
+  choice=$(echo "$worktrees" | fzf \
+    --height=50% --border \
+    --prompt="worktree > " \
+    --header="${project} — select worktree") || return 0
+
+  [[ -z "$choice" ]] && return 0
+  echo "$choice"
+}

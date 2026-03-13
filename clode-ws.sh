@@ -414,3 +414,57 @@ _cws_delete_worktree() {
     echo "Worktree directory not found: $worktree_path"
   fi
 }
+
+_cws_navigate_project() {
+  # Build merged list: active sessions first (●), then inactive git repos (○)
+  local active_projects=()
+  while IFS= read -r session; do
+    active_projects+=("${session#cws-}")
+  done < <(_cws_sessions)
+
+  local lines=()
+
+  # Active sessions first
+  for p in "${active_projects[@]}"; do
+    lines+=("● $p")
+  done
+
+  # All git repos not already listed
+  while IFS= read -r project; do
+    local already=0
+    for ap in "${active_projects[@]}"; do
+      [[ "$ap" == "$project" ]] && already=1 && break
+    done
+    [[ $already -eq 0 ]] && lines+=("○ $project")
+  done < <(_cws_projects)
+
+  # tmux-only sessions (session exists but no ~/Projects/<project>/)
+  for p in "${active_projects[@]}"; do
+    if [[ ! -d "${_CLODE_WS_PROJECTS_DIR}/${p}" ]]; then
+      # Replace the ● entry with a [tmux only] label
+      for i in "${!lines[@]}"; do
+        [[ "${lines[$i]}" == "● $p" ]] && lines[$i]="● $p [tmux only]"
+      done
+    fi
+  done
+
+  if [[ ${#lines[@]} -eq 0 ]]; then
+    echo "No projects found in ${_CLODE_WS_PROJECTS_DIR}" >&2
+    return 1
+  fi
+
+  local choice
+  choice=$(printf '%s\n' "${lines[@]}" | fzf \
+    --height=50% --border \
+    --prompt="project > " \
+    --header="clode-ws — select project") || return 0
+
+  [[ -z "$choice" ]] && return 0
+
+  # Strip the ● / ○ prefix and any [tmux only] label
+  local project="${choice#● }"
+  project="${project#○ }"
+  project="${project% \[tmux only\]}"
+
+  echo "$project"
+}

@@ -221,3 +221,23 @@ _clode_list() {
     fi
   done
 }
+
+_clode_update() {
+  _clode_load_config
+  local reconfigure=0
+  [[ "${1:-}" == "--reconfigure" ]] && reconfigure=1
+
+  echo "clode: pulling latest image (${CLODE_IMAGE})..."
+  docker pull "$CLODE_IMAGE"
+
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  if [[ $reconfigure -eq 1 ]]; then
+    bash "${script_dir}/install.sh" --reconfigure
+  else
+    bash "${script_dir}/install.sh"
+  fi
+
+  echo "clode: updated. Run: source ~/.zshrc"
+}

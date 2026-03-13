@@ -158,3 +158,17 @@ _clode_start() {
     docker run -it "${_args[@]}" "$CLODE_IMAGE" $claude_flags "$@"
   fi
 }
+
+_clode_attach() {
+  local name
+  name=$(_clode_name)
+
+  if ! _clode_is_running "$name"; then
+    echo "clode: no running container for '$(pwd)'." >&2
+    echo "       Run 'clode start' to begin a session." >&2
+    return 1
+  fi
+
+  echo "clode: attaching to '$name'"
+  docker exec -it "$name" claude --dangerously-skip-permissions --resume
+}

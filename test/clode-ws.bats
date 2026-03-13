@@ -144,3 +144,18 @@ _make_test_repo() {
   done < <(_cws_worktrees "$project")
   rm -rf "$tmpdir"
 }
+
+@test "_cws_fg_clode: prints spec error message when container not running" {
+  # Use a PATH-based mock so the stub works across shells (bats runs bash, script is sourced as zsh)
+  local mock_dir
+  mock_dir=$(mktemp -d)
+  printf '#!/bin/sh\n# docker mock: always return empty (no running containers)\n' > "${mock_dir}/docker"
+  chmod +x "${mock_dir}/docker"
+  PATH="${mock_dir}:$PATH"
+
+  run _cws_fg_clode "myproject" "main"
+  rm -rf "$mock_dir"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Container cws-myproject-main not found — it may have exited. Use 'new clode terminal' to start fresh."* ]]
+}

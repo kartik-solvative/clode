@@ -319,3 +319,30 @@ _cws_new_clode_terminal() {
 
   _cws_goto "$session" "$wname"
 }
+
+_cws_fg_clode() {
+  local project="$1" slug="$2"
+  local session
+  session=$(_cws_session_name "$project")
+  local container
+  container=$(_cws_container_name "$project" "$slug")
+
+  # Check container is actually running (exact name match — docker filter is substring-only)
+  if ! docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${container}$"; then
+    echo "Container ${container} not found — it may have exited. Use 'new clode terminal' to start fresh."
+    return 1
+  fi
+
+  local n
+  n=$(_cws_next_n "$session" "$slug" "clode")
+  local wname
+  wname=$(_cws_window_name "$slug" "clode" "$n")
+  local worktree_dir
+  worktree_dir=$(_cws_worktree_dir "$project" "$slug")
+
+  # Open a new window that execs into the running container
+  tmux new-window -t "$session" -n "$wname" -c "$worktree_dir" \
+    -- docker exec -it "$container" claude --dangerously-skip-permissions --resume
+
+  _cws_goto "$session" "$wname"
+}

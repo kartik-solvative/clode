@@ -80,11 +80,12 @@ SUBCOMMANDS
   help                   Show this help message
 
 FLAGS (start / default run)
-  --bg            Run in background (non-interactive)
-  --resume        Resume last conversation
-  --memory <mem>  Memory limit (default: 4g)
-  --cpus <n>      CPU limit (default: 2)
-  -h, --help      Show this help message
+  --bg              Run in background (non-interactive)
+  --resume          Resume last conversation
+  -p, --port <map>  Publish a port (e.g. -p 3000:3000); repeatable
+  --memory <mem>    Memory limit (default: 4g)
+  --cpus <n>        CPU limit (default: 2)
+  -h, --help        Show this help message
 
 ENVIRONMENT FILES
   ~/.clode.env    Global env vars — always injected
@@ -93,7 +94,8 @@ ENVIRONMENT FILES
 EXAMPLES
   clode                        Start or attach (smart default)
   clode start                  Explicitly start new session
-  clode start --bg "fix tests" Run task in background
+  clode start --bg "fix tests"      Run task in background
+  clode -p 3000:3000 -p 5173:5173   Expose ports to host
   clode attach                 Attach to running session
   clode stop                   Stop current project's container
   clode list                   Show all projects and status
@@ -107,14 +109,16 @@ _clode_start() {
   local name
   name=$(_clode_name)
   local bg=0 resume=0 memory="4g" cpus="2"
+  local -a ports=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --bg)       bg=1;        shift ;;
-      --resume)   resume=1;    shift ;;
-      --memory)   memory="$2"; shift 2 ;;
-      --cpus)     cpus="$2";   shift 2 ;;
-      *)          break ;;
+      --bg)           bg=1;                    shift ;;
+      --resume)       resume=1;                shift ;;
+      --memory)       memory="$2";             shift 2 ;;
+      --cpus)         cpus="$2";               shift 2 ;;
+      -p|--port)      ports+=("-p" "$2");      shift 2 ;;
+      *)              break ;;
     esac
   done
 
@@ -129,7 +133,7 @@ _clode_start() {
   mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
 
   if [[ $bg -eq 1 ]]; then
-    docker run -d "${_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+    docker run -d "${_args[@]}" "${ports[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
     echo "clode: started '$name' in background"
 
     # Idle timeout watcher
@@ -155,7 +159,7 @@ _clode_start() {
     fi
   else
     echo "clode: starting '$name'"
-    docker run -it "${_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+    docker run -it "${_args[@]}" "${ports[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
   fi
 }
 

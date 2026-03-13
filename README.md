@@ -32,13 +32,34 @@ source ~/.zshrc
 
 It is **idempotent** — safe to run again after `git pull`.
 
-## Set your token
+## Get your token
 
-```bash
-export CLAUDE_CODE_OAUTH_TOKEN=<your-token>
-```
+`CLAUDE_CODE_OAUTH_TOKEN` is the OAuth token Claude Code stores after you log in. To get it:
 
-Add this to `~/.zshrc` (or `~/.bash_profile`) to make it permanent.
+1. Install Claude Code on your host machine (one-time):
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   ```
+2. Log in — this opens a browser to authenticate with your Anthropic account:
+   ```bash
+   claude
+   ```
+3. After login, extract the token from the credentials file:
+   ```bash
+   cat ~/.claude/.credentials.json
+   # look for "oauth_token": "sk-ant-oat01-..."
+   ```
+   Or with `jq`:
+   ```bash
+   jq -r '.claudeAiOauth.oauth_token' ~/.claude/.credentials.json
+   ```
+
+4. Export it (add to `~/.zshrc` to make it permanent):
+   ```bash
+   export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...
+   ```
+
+> You only need Claude Code installed on your host to get the token. Once `clode` is set up, all actual Claude usage runs inside Docker.
 
 ## Commands
 

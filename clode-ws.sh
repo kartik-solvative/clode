@@ -13,3 +13,29 @@ _cws_slugify() {
   input="${input#.worktrees/}"
   echo "${input//[\/[:space:]]/-}"
 }
+
+_cws_session_name() {
+  echo "cws-${1}"
+}
+
+_cws_container_name() {
+  local project="$1" slug="$2"
+  echo "cws-${project}-${slug}"
+}
+
+_cws_window_name() {
+  local slug="$1" type="$2" n="$3"
+  echo "${slug}:${type}-${n}"
+}
+
+# Resolve a worktree slug back to its filesystem path.
+# "main" → ~/Projects/<project>/
+# anything else → ~/Projects/<project>/.worktrees/<slug>/
+_cws_worktree_dir() {
+  local project="$1" slug="$2"
+  if [[ "$slug" == "main" ]]; then
+    echo "${_CLODE_WS_PROJECTS_DIR}/${project}"
+  else
+    echo "${_CLODE_WS_PROJECTS_DIR}/${project}/.worktrees/${slug}"
+  fi
+}

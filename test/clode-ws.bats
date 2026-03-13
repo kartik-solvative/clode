@@ -30,3 +30,33 @@ setup() {
   result="$(_cws_slugify ".worktrees/fix/issue-42")"
   [ "$result" = "fix-issue-42" ]
 }
+
+@test "_cws_session_name: prefixes with cws-" {
+  [ "$(_cws_session_name "focusreader")" = "cws-focusreader" ]
+}
+
+@test "_cws_container_name: cws-project-slug format" {
+  [ "$(_cws_container_name "focusreader" "main")" = "cws-focusreader-main" ]
+}
+
+@test "_cws_container_name: handles feature slug" {
+  [ "$(_cws_container_name "focusreader" "feature-auth")" = "cws-focusreader-feature-auth" ]
+}
+
+@test "_cws_window_name: worktree:type-n format" {
+  [ "$(_cws_window_name "main" "host" "1")" = "main:host-1" ]
+}
+
+@test "_cws_window_name: clode type" {
+  [ "$(_cws_window_name "feature-auth" "clode" "2")" = "feature-auth:clode-2" ]
+}
+
+@test "_cws_worktree_dir: main maps to project root" {
+  result="$(_cws_worktree_dir "focusreader" "main")"
+  [ "$result" = "$HOME/Projects/focusreader" ]
+}
+
+@test "_cws_worktree_dir: slug maps to .worktrees subdir" {
+  result="$(_cws_worktree_dir "focusreader" "feature-auth")"
+  [ "$result" = "$HOME/Projects/focusreader/.worktrees/feature-auth" ]
+}

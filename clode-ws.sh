@@ -559,3 +559,41 @@ _cws_navigate_terminal() {
       ;;
   esac
 }
+
+clode-ws() {
+  case "${1:-}" in
+    new)
+      shift
+      _cws_cmd_new "$@"
+      ;;
+    kill)
+      shift
+      _cws_cmd_kill "$@"
+      ;;
+    list)
+      _cws_cmd_list
+      ;;
+    prune)
+      _cws_cmd_prune
+      ;;
+    ""|-*)
+      # No subcommand — open the full 3-step navigator
+      local project
+      project=$(_cws_navigate_project) || return 0
+      [[ -z "$project" ]] && return 0
+
+      local slug
+      slug=$(_cws_navigate_worktree "$project") || return 0
+      [[ -z "$slug" ]] && return 0
+
+      _cws_navigate_terminal "$project" "$slug"
+      ;;
+    *)
+      echo "Usage: clode-ws [new|kill|list|prune] [args]" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Short alias
+cws() { clode-ws "$@"; }

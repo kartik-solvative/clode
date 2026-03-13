@@ -60,3 +60,21 @@ setup() {
   result="$(_cws_worktree_dir "focusreader" "feature-auth")"
   [ "$result" = "$HOME/Projects/focusreader/.worktrees/feature-auth" ]
 }
+
+@test "_cws_next_n: returns 1 when no windows exist" {
+  _cws_windows() { echo ""; }
+  result="$(_cws_next_n "cws-test" "main" "host")"
+  [ "$result" = "1" ]
+}
+
+@test "_cws_next_n: returns next index after existing windows" {
+  _cws_windows() { printf "main:host-1\nmain:host-2\n"; }
+  result="$(_cws_next_n "cws-test" "main" "host")"
+  [ "$result" = "3" ]
+}
+
+@test "_cws_next_n: only counts matching type, not other types" {
+  _cws_windows() { printf "main:host-1\nmain:clode-1\nmain:clode-2\n"; }
+  result="$(_cws_next_n "cws-test" "main" "host")"
+  [ "$result" = "2" ]
+}

@@ -42,7 +42,7 @@ _clode_base_args() {
   # Ensure ~/.claude.json exists as a file (Docker would create a dir if missing)
   touch "$_CLODE_HOME/.claude.json" 2>/dev/null || true
   printf -- '--rm\n'
-  printf -- '-u %s\n' "$(id -u):$(id -g)"
+  printf -- '-u\n%s\n' "$(id -u):$(id -g)"
   printf -- '-e HOME=%s\n' "$_CLODE_HOME"
   printf -- '-e CLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
   _clode_all_env_args
@@ -123,13 +123,13 @@ _clode_start() {
     return 1
   fi
 
-  local claude_flags="--dangerously-skip-permissions"
-  [[ $resume -eq 1 ]] && claude_flags="$claude_flags --resume"
+  local -a claude_flags=("--dangerously-skip-permissions")
+  [[ $resume -eq 1 ]] && claude_flags+=("--resume")
 
   mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
 
   if [[ $bg -eq 1 ]]; then
-    docker run -d "${_args[@]}" "$CLODE_IMAGE" $claude_flags "$@"
+    docker run -d "${_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
     echo "clode: started '$name' in background"
 
     # Idle timeout watcher
@@ -155,7 +155,7 @@ _clode_start() {
     fi
   else
     echo "clode: starting '$name'"
-    docker run -it "${_args[@]}" "$CLODE_IMAGE" $claude_flags "$@"
+    docker run -it "${_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
   fi
 }
 
@@ -231,7 +231,13 @@ _clode_update() {
   docker pull "$CLODE_IMAGE"
 
   local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local _clode_self
+  if [[ -n "${ZSH_VERSION:-}" ]]; then
+    _clode_self="${(%):-%x}"
+  else
+    _clode_self="${BASH_SOURCE[0]}"
+  fi
+  script_dir="$(cd "$(dirname "$_clode_self")" && pwd)"
 
   if [[ $reconfigure -eq 1 ]]; then
     bash "${script_dir}/install.sh" --reconfigure

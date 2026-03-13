@@ -20,7 +20,7 @@ Claude Code normally runs with full access to your machine. `clode` wraps it in 
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/clode.git ~/Projects/clode
+git clone https://github.com/kartik-solvative/clode.git ~/Projects/clode
 cd ~/Projects/clode
 ./install.sh
 source ~/.zshrc

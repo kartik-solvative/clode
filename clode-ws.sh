@@ -181,3 +181,45 @@ _cws_cmd_new() {
   [[ -z "$slug" ]] && return 0
   _cws_navigate_terminal "$project" "$slug"
 }
+
+# Kill a clode-ws session and all its containers.
+_cws_cmd_kill() {
+  local force=0
+  if [[ "$1" == "--force" ]]; then
+    force=1
+    shift
+  fi
+
+  local project="$1"
+  if [[ -z "$project" ]]; then
+    echo "Usage: clode-ws kill [--force] <project>" >&2
+    return 1
+  fi
+
+  local session
+  session=$(_cws_session_name "$project")
+
+  if [[ $force -eq 0 ]]; then
+    printf "Kill session %s and all its containers? [y/N] " "$session"
+    read -r confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || return 0
+  fi
+
+  # Stop and remove all cws containers for this project
+  # docker --filter name= is substring match — post-filter with grep to get only this project's containers
+  local containers
+  containers=$(docker ps -a --filter "name=cws-${project}-" --format "{{.Names}}" 2>/dev/null \
+    | grep "^cws-${project}-")
+  if [[ -n "$containers" ]]; then
+    echo "Removing containers: $containers"
+    echo "$containers" | xargs docker rm -f 2>/dev/null || true
+  fi
+
+  # Kill tmux session
+  if tmux has-session -t "$session" 2>/dev/null; then
+    tmux kill-session -t "$session"
+    echo "Killed session: $session"
+  else
+    echo "Warning: session $session not found (containers cleaned up anyway)."
+  fi
+}

@@ -302,6 +302,58 @@ func TestConfirmPromptNo(t *testing.T) {
 	}
 }
 
+func TestPaletteActivation(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	nm := next.(ui.Model)
+	if nm.Mode() != ui.ModePalette {
+		t.Errorf("want ModePalette after space, got %v", nm.Mode())
+	}
+}
+
+func TestPaletteFilterReducesList(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	m = next.(ui.Model)
+	totalBefore := m.PaletteCount()
+	if totalBefore == 0 {
+		t.Fatal("palette should have entries when project is selected")
+	}
+	for _, c := range "new" {
+		next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}})
+		m = next.(ui.Model)
+	}
+	if m.PaletteCount() >= totalBefore {
+		t.Errorf("filtering by 'new' should reduce entries; was %d, now %d", totalBefore, m.PaletteCount())
+	}
+}
+
+func TestPaletteEsc(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	nm := next.(ui.Model)
+	if nm.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after Esc, got %v", nm.Mode())
+	}
+}
+
+func TestPaletteCursorNavigation(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	m = next.(ui.Model)
+	if m.PaletteCount() < 2 {
+		t.Skip("need at least 2 entries to test cursor movement")
+	}
+	initialCursor := m.PaletteCursor()
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	if m.PaletteCursor() <= initialCursor {
+		t.Errorf("want cursor to advance on Down, was %d now %d", initialCursor, m.PaletteCursor())
+	}
+}
+
 func TestActionModeContextKeys_DetachedTerminalSelected(t *testing.T) {
 	st := &state.State{
 		Projects: []state.Project{{

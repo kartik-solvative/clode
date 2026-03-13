@@ -52,6 +52,7 @@ type Model struct {
 	expandedProjects  map[string]bool
 	expandedWorktrees map[string]bool
 	prompt            *promptModel
+	palette           *paletteModel
 }
 
 // New creates a Model from the given state. All nodes start collapsed.
@@ -74,6 +75,21 @@ func New(st *state.State) Model {
 const ModeNormal = modeNormal
 const ModeAction = modeAction
 const ModePrompt = modePrompt
+const ModePalette = modePalette
+
+func (m Model) PaletteCount() int {
+	if m.palette == nil {
+		return 0
+	}
+	return m.palette.filteredCount()
+}
+
+func (m Model) PaletteCursor() int {
+	if m.palette == nil {
+		return 0
+	}
+	return m.palette.cursor
+}
 
 // PromptValue returns the current text value of the active prompt, or "" if none.
 func (m Model) PromptValue() string {
@@ -127,6 +143,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.mode == modePrompt {
 			return m.updatePrompt(msg)
+		}
+		if m.mode == modePalette {
+			return m.updatePalette(msg)
 		}
 		return m.dispatchKey(msg)
 	}
@@ -182,8 +201,20 @@ func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case ' ':
 				m.mode = modePalette
+				m.palette = newPaletteModel(contextActions(m))
 			}
 		}
+	}
+	return m, nil
+}
+
+// updatePalette handles key events when the command palette is active.
+func (m Model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	done, cmd := m.palette.update(msg)
+	if done {
+		m.mode = modeNormal
+		m.palette = nil
+		return m, cmd
 	}
 	return m, nil
 }

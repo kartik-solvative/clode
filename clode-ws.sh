@@ -262,3 +262,60 @@ _cws_new_host_terminal() {
   tmux new-window -t "$session" -n "$wname" -c "$worktree_dir"
   _cws_goto "$session" "$wname"
 }
+
+_cws_new_clode_terminal() {
+  local project="$1" slug="$2"
+  local session
+  session=$(_cws_session_name "$project")
+  local worktree_dir
+  worktree_dir=$(_cws_worktree_dir "$project" "$slug")
+  local container
+  container=$(_cws_container_name "$project" "$slug")
+
+  # Guard: if container is already running, tell the user to use fg instead
+  if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${container}$"; then
+    echo "Container ${container} is already running." >&2
+    echo "Use 'fg' in the navigator to reattach to the existing conversation." >&2
+    return 1
+  fi
+
+  # Remove stale (stopped) container if present
+  if docker ps -a --format "{{.Names}}" 2>/dev/null | grep -q "^${container}$"; then
+    echo "Warning: removing stale container ${container}" >&2
+    docker rm -f "$container" 2>/dev/null || true
+  fi
+
+  local n
+  n=$(_cws_next_n "$session" "$slug" "clode")
+  local wname
+  wname=$(_cws_window_name "$slug" "clode" "$n")
+
+  # Open a new tmux window that runs docker run -it directly (no -d + attach pattern)
+  # No --rm so fg reattach works after closing the window
+  tmux new-window -t "$session" -n "$wname" -c "$worktree_dir" \
+    -- docker run -it \
+      -u "$(id -u):$(id -g)" \
+      -e "HOME=${_CLODE_WS_HOME}" \
+      -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" \
+      -v "${_CLODE_WS_HOME}/.claude:${_CLODE_WS_HOME}/.claude" \
+      -v "${_CLODE_WS_HOME}/.claude.json:${_CLODE_WS_HOME}/.claude.json" \
+      -v "${_CLODE_WS_HOME}/.ssh:${_CLODE_WS_HOME}/.ssh:ro" \
+      -v "${worktree_dir}:/workspace" \
+      --name "${container}" \
+      --security-opt=no-new-privileges \
+      --cap-drop=ALL \
+      --memory=4g \
+      --cpus=2 \
+      "${_CLODE_WS_IMAGE}" --dangerously-skip-permissions
+
+  # ntfy notification on container exit (background watcher)
+  if [[ -n "${NTFY_TOPIC}" ]]; then
+    (docker wait "$container" >/dev/null 2>&1 && \
+      curl -s -o /dev/null "https://ntfy.sh/${NTFY_TOPIC}" \
+        -H "Title: clode done" \
+        -H "Tags: white_check_mark" \
+        -d "${project}/${slug} finished") &
+  fi
+
+  _cws_goto "$session" "$wname"
+}

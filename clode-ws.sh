@@ -223,3 +223,27 @@ _cws_cmd_kill() {
     echo "Warning: session $session not found (containers cleaned up anyway)."
   fi
 }
+
+# Remove all non-running clode-ws containers (exited, created, paused, dead).
+_cws_cmd_prune() {
+  local containers
+  # All non-running cws-* containers (exited, created, paused, or dead)
+  # Multiple docker ps calls because Docker ANDs multiple --filter status= values
+  containers=$(
+    { docker ps -a --filter "name=cws-" --filter "status=exited"  --format "{{.Names}}" 2>/dev/null
+      docker ps -a --filter "name=cws-" --filter "status=created" --format "{{.Names}}" 2>/dev/null
+      docker ps -a --filter "name=cws-" --filter "status=paused"  --format "{{.Names}}" 2>/dev/null
+      docker ps -a --filter "name=cws-" --filter "status=dead"    --format "{{.Names}}" 2>/dev/null
+    } | grep "^cws-" | sort -u
+  )
+
+  if [[ -z "$containers" ]]; then
+    echo "Nothing to prune."
+    return 0
+  fi
+
+  echo "Removing non-running containers:"
+  echo "$containers"
+  echo "$containers" | xargs docker rm 2>/dev/null || true
+  echo "Done."
+}

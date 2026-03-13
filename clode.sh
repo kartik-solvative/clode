@@ -32,8 +32,9 @@ _clode_all_env_args() {
 }
 
 # ── Base docker args ──────────────────────────────────────
-# Outputs one docker-arg token per line. Callers MUST consume with mapfile:
-#   mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
+# Outputs one docker-arg token per line. Callers MUST collect into an array:
+#   local -a _args=()
+#   while IFS= read -r _line; do [[ -n "$_line" ]] && _args+=("$_line"); done < <(_clode_base_args ...)
 #   docker run "${_args[@]}" ...
 # Do NOT use: eval docker run $(_clode_base_args ...) — word-splitting will corrupt paths with spaces.
 _clode_base_args() {
@@ -81,8 +82,7 @@ _clode_build_port_args() {
   _CLODE_PORT_EXTRA=()
   _CLODE_PORT_LINES=()
   [[ -z "${CLODE_EXPOSE_PORTS:-}" ]] && return
-  local IFS=','
-  for cport in $CLODE_EXPOSE_PORTS; do
+  while IFS= read -r cport; do
     cport="${cport// /}"
     [[ -z "$cport" ]] && continue
     local hport
@@ -91,7 +91,7 @@ _clode_build_port_args() {
     _CLODE_PORT_EXTRA+=("-e" "CLODE_PORT_${cport}=${hport}")
     _CLODE_PORT_EXTRA+=("--label" "clode.port.${cport}=${hport}")
     _CLODE_PORT_LINES+=("  http://localhost:${hport}  →  container port ${cport}")
-  done
+  done < <(tr ',' '\n' <<< "${CLODE_EXPOSE_PORTS}")
 }
 
 _clode_help() {
@@ -168,7 +168,9 @@ _clode_start() {
   [[ $resume -eq 1 ]] && claude_flags+=("--resume")
 
   _clode_build_port_args
-  mapfile -t _args < <(_clode_base_args "$name" "$memory" "$cpus")
+  local -a _args=()
+  while IFS= read -r _line; do [[ -n "$_line" ]] && _args+=("$_line"); done \
+    < <(_clode_base_args "$name" "$memory" "$cpus")
   # Combine: base args + auto port mappings + port env/labels + manual -p overrides
   local -a all_args=("${_args[@]}" "${_CLODE_PORT_ARGS[@]}" "${_CLODE_PORT_EXTRA[@]}" "${ports[@]}")
 

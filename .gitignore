@@ -1,0 +1,15 @@
+# Python placeholder
+app.py
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+npm-debug.log
+
+# macOS
+.DS_Store
+
+# Secrets (never commit)
+.env
+*.env

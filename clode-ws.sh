@@ -372,3 +372,45 @@ _cws_add_worktree() {
 
   echo "Created worktree: $worktree_path (branch: $branch)"
 }
+
+_cws_delete_worktree() {
+  local project="$1" slug="$2"
+  local session
+  session=$(_cws_session_name "$project")
+  local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
+  local worktree_path="${project_dir}/.worktrees/${slug}"
+
+  printf "Delete worktree '%s' and all its terminals/containers? [y/N] " "$slug"
+  read -r confirm
+  [[ "$confirm" =~ ^[Yy]$ ]] || return 0
+
+  # 1. Switch active client away from any window in this worktree before killing
+  if [[ -n "$TMUX" ]]; then
+    local current_window
+    current_window=$(tmux display-message -p "#{window_name}" 2>/dev/null)
+    if [[ "$current_window" == ${slug}:* ]]; then
+      # "=" prefix = exact window name match (avoids colon being parsed as pane separator)
+      tmux select-window -t "${session}:=main:host-1" 2>/dev/null || \
+        tmux select-window -t "${session}:^" 2>/dev/null || true
+    fi
+  fi
+
+  # 2. Kill tmux windows for this worktree
+  # "=" prefix = exact window name match (avoids colon being parsed as pane separator)
+  _cws_windows "$session" "$slug" | while IFS= read -r wname; do
+    tmux kill-window -t "${session}:=${wname}" 2>/dev/null || true
+  done
+
+  # 3. Stop and remove clode containers for this worktree
+  local container
+  container=$(_cws_container_name "$project" "$slug")
+  docker rm -f "$container" 2>/dev/null || true
+
+  # 4. Remove the git worktree
+  if [[ -d "$worktree_path" ]]; then
+    git -C "$project_dir" worktree remove "$worktree_path" --force 2>&1 || true
+    echo "Removed worktree: $worktree_path"
+  else
+    echo "Worktree directory not found: $worktree_path"
+  fi
+}

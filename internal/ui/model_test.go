@@ -1,6 +1,7 @@
 package ui_test
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,6 +67,36 @@ func TestNavigateUpDoesNotGoBelowZero(t *testing.T) {
 	nm := next.(ui.Model)
 	if nm.Cursor() != 0 {
 		t.Errorf("want cursor stay at 0 on up from top, got %d", nm.Cursor())
+	}
+}
+
+func TestPreviewBreadcrumb(t *testing.T) {
+	m := ui.New(twoProjectState())
+	// Expand focusreader
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	// cursor → main worktree
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	// expand main
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	// cursor → host-1
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	// cursor → clode-1
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+
+	bc := m.PreviewBreadcrumb()
+	if bc == "" {
+		t.Fatal("want non-empty breadcrumb when terminal is selected")
+	}
+	if !strings.Contains(bc, "focusreader") {
+		t.Errorf("want 'focusreader' in breadcrumb, got %q", bc)
+	}
+	if !strings.Contains(bc, "clode-1") {
+		t.Errorf("want 'clode-1' in breadcrumb, got %q", bc)
 	}
 }
 

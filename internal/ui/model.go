@@ -75,8 +75,17 @@ func (m Model) Cursor() int { return m.cursor }
 // VisibleCount returns the number of visible rows (for tests).
 func (m Model) VisibleCount() int { return len(m.nodes) }
 
-// PreviewBreadcrumb returns "" until Task 5 implements it.
-func (m Model) PreviewBreadcrumb() string { return "" }
+// PreviewBreadcrumb returns a formatted breadcrumb for the selected terminal node.
+func (m Model) PreviewBreadcrumb() string {
+	if m.cursor >= len(m.nodes) {
+		return ""
+	}
+	n := m.nodes[m.cursor]
+	if n.kind != nodeTerminal {
+		return ""
+	}
+	return n.project + " › " + n.worktree + " › " + n.terminal.Name
+}
 
 // Init starts the 2s tick (implemented in main.go poller; this is a no-op stub).
 func (m Model) Init() tea.Cmd { return nil }

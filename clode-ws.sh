@@ -346,3 +346,29 @@ _cws_fg_clode() {
 
   _cws_goto "$session" "$wname"
 }
+
+_cws_add_worktree() {
+  local project="$1"
+  local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
+
+  printf "Branch name for new worktree: "
+  read -r branch
+  [[ -z "$branch" ]] && return 0
+
+  local slug
+  slug=$(_cws_slugify "$branch")
+  local worktree_path="${project_dir}/.worktrees/${slug}"
+
+  if [[ -d "$worktree_path" ]]; then
+    echo "Worktree already exists: $worktree_path" >&2
+    return 1
+  fi
+
+  mkdir -p "${project_dir}/.worktrees"
+  if \! git -C "$project_dir" worktree add "$worktree_path" -b "$branch" 2>&1; then
+    echo "git worktree add failed — see error above." >&2
+    return 1
+  fi
+
+  echo "Created worktree: $worktree_path (branch: $branch)"
+}

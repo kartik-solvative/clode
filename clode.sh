@@ -62,3 +62,42 @@ _clode_base_args() {
 _clode_name()       { basename "$(pwd)"; }
 _clode_is_running() { docker ps -q --filter "name=^${1}$" 2>/dev/null | grep -q .; }
 _clode_exists()     { docker ps -aq --filter "name=^${1}$" 2>/dev/null | grep -q .; }
+
+_clode_help() {
+  cat <<'EOF'
+clode — Claude Code in Docker
+
+USAGE
+  clode [flags] [prompt]     Smart start: attach if running, else start
+  clode <subcommand> [args]
+
+SUBCOMMANDS
+  start [--bg] [prompt]  Explicitly start a new session
+  attach                 Attach to running container (error if none)
+  stop                   Stop and remove current project's container
+  list                   List all projects and container status
+  update [--reconfigure] Pull latest image, update shell config
+  help                   Show this help message
+
+FLAGS (start / default run)
+  --bg            Run in background (non-interactive)
+  --resume        Resume last conversation
+  --memory <mem>  Memory limit (default: 4g)
+  --cpus <n>      CPU limit (default: 2)
+  -h, --help      Show this help message
+
+ENVIRONMENT FILES
+  ~/.clode.env    Global env vars — always injected
+  ./.env          Project env vars — injected if present
+
+EXAMPLES
+  clode                        Start or attach (smart default)
+  clode start                  Explicitly start new session
+  clode start --bg "fix tests" Run task in background
+  clode attach                 Attach to running session
+  clode stop                   Stop current project's container
+  clode list                   Show all projects and status
+  clode update                 Pull latest image
+  clode update --reconfigure   Update + change settings
+EOF
+}

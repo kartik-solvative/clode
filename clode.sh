@@ -241,3 +241,41 @@ _clode_update() {
 
   echo "clode: updated. Run: source ~/.zshrc"
 }
+
+clode() {
+  case "${1:-}" in
+    -h|--help|help)
+      _clode_help
+      return 0
+      ;;
+    start)
+      shift
+      _clode_start "$@"
+      ;;
+    attach)
+      _clode_attach
+      ;;
+    stop)
+      _clode_stop
+      ;;
+    list)
+      _clode_list
+      ;;
+    update)
+      shift
+      _clode_update "${1:-}"
+      ;;
+    *)
+      # Smart default: attach if running, else start
+      local name
+      name=$(_clode_name)
+      if _clode_is_running "$name"; then
+        echo "clode: container '$name' is running — attaching"
+        _clode_attach
+      else
+        echo "clode: no running container — starting new session"
+        _clode_start "$@"
+      fi
+      ;;
+  esac
+}

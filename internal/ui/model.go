@@ -26,11 +26,12 @@ const (
 )
 
 type node struct {
-	kind     nodeType
-	project  string
-	worktree string
-	terminal *state.Terminal
-	expanded bool
+	kind       nodeType
+	project    string
+	worktree   string
+	terminal   *state.Terminal
+	expanded   bool
+	hasSession bool // for project nodes: whether cws-<project> session exists
 }
 
 // stateMsg carries a fresh *state.State for the 2s poller.
@@ -152,9 +153,10 @@ func buildNodes(st *state.State, expandedProjects, expandedWorktrees map[string]
 	var nodes []node
 	for _, p := range st.Projects {
 		pn := node{
-			kind:     nodeProject,
-			project:  p.Name,
-			expanded: expandedProjects[p.Name],
+			kind:       nodeProject,
+			project:    p.Name,
+			expanded:   expandedProjects[p.Name],
+			hasSession: p.HasSession,
 		}
 		nodes = append(nodes, pn)
 		if !expandedProjects[p.Name] {

@@ -44,6 +44,9 @@ func renderNode(n node, selected bool, width int) string {
 			arrow = "▼"
 		}
 		label := n.project
+		if !n.hasSession {
+			label = label + " " + styleDim.Render("[no session]")
+		}
 		row = fmt.Sprintf("%s %s", arrow, label)
 		row = styleProject.Render(row)
 	case nodeWorktree:
@@ -83,5 +86,3 @@ func dotStyle(t *state.Terminal) string {
 	}
 }
 
-// suppress unused variable warning for styleDim
-var _ = styleDim

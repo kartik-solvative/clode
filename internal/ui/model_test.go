@@ -123,3 +123,130 @@ func TestExpandCollapse(t *testing.T) {
 		t.Errorf("want %d nodes after collapse, got %d", initialCount, nm2.VisibleCount())
 	}
 }
+
+func hasKey(keys []ui.ActionKey, k string) bool {
+	for _, a := range keys {
+		if a.Key == k {
+			return true
+		}
+	}
+	return false
+}
+
+func TestActionModeActivation(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	if nm.Mode() != ui.ModeAction {
+		t.Errorf("want ModeAction after Ctrl+A, got %v", nm.Mode())
+	}
+}
+
+func TestActionModeEsc(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	next2, _ := nm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	nm2 := next2.(ui.Model)
+	if nm2.Mode() != ui.ModeNormal {
+		t.Errorf("want ModeNormal after Esc, got %v", nm2.Mode())
+	}
+}
+
+func TestActionModeContextKeys_ProjectSelected(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	keys := nm.ActionModeKeys()
+	for _, want := range []string{"n", "c", "w", "X"} {
+		if !hasKey(keys, want) {
+			t.Errorf("want key %q in action mode for project, got: %v", want, keys)
+		}
+	}
+	if hasKey(keys, "D") {
+		t.Error("key 'D' should not appear for project node")
+	}
+	if hasKey(keys, "f") {
+		t.Error("key 'f' should not appear for project node")
+	}
+}
+
+func TestActionModeContextKeys_WorktreeSelected(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	keys := nm.ActionModeKeys()
+	for _, want := range []string{"n", "c", "w", "D", "X"} {
+		if !hasKey(keys, want) {
+			t.Errorf("want key %q in action mode for worktree, got: %v", want, keys)
+		}
+	}
+	if hasKey(keys, "f") {
+		t.Error("key 'f' should not appear for non-detached worktree node")
+	}
+}
+
+func TestActionModeContextKeys_RunningTerminalSelected(t *testing.T) {
+	m := ui.New(twoProjectState())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	keys := nm.ActionModeKeys()
+	if !hasKey(keys, "d") {
+		t.Error("want 'd' (delete) for running terminal")
+	}
+	if hasKey(keys, "f") {
+		t.Error("key 'f' should not appear for running terminal (not detached)")
+	}
+	if !hasKey(keys, "D") {
+		t.Error("want 'D' (delete worktree) for terminal node per spec")
+	}
+}
+
+func TestActionModeContextKeys_DetachedTerminalSelected(t *testing.T) {
+	st := &state.State{
+		Projects: []state.Project{{
+			Name: "focusreader", HasSession: true,
+			Worktrees: []state.Worktree{{
+				Slug: "main",
+				Terminals: []state.Terminal{
+					{Name: "host-1", Type: state.TypeHost, Status: state.StatusRunning, WindowIndex: 0},
+					{Name: "clode-1", Type: state.TypeClode, Status: state.StatusDetached, WindowIndex: -1,
+						Container: "cws-focusreader-main-clode"},
+				},
+			}},
+		}},
+	}
+	m := ui.New(st)
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	nm := next.(ui.Model)
+	keys := nm.ActionModeKeys()
+	if !hasKey(keys, "f") {
+		t.Error("want 'f' (fg reattach) for detached clode terminal")
+	}
+	if !hasKey(keys, "d") {
+		t.Error("want 'd' (delete) for detached terminal")
+	}
+}

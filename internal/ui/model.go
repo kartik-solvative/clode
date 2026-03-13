@@ -69,11 +69,24 @@ func New(st *state.State) Model {
 	return m
 }
 
+// Exported mode constants for tests.
+const ModeNormal = modeNormal
+const ModeAction = modeAction
+
 // Cursor returns the current cursor position (for tests).
 func (m Model) Cursor() int { return m.cursor }
 
 // VisibleCount returns the number of visible rows (for tests).
 func (m Model) VisibleCount() int { return len(m.nodes) }
+
+// Mode returns current view mode (for tests).
+func (m Model) Mode() viewMode { return m.mode }
+
+// ActionKey is one entry in the action mode overlay.
+type ActionKey struct{ Key, Label string }
+
+// ActionModeKeys returns context-sensitive keys for the current node.
+func (m Model) ActionModeKeys() []ActionKey { return contextActions(m) }
 
 // PreviewBreadcrumb returns a formatted breadcrumb for the selected terminal node.
 func (m Model) PreviewBreadcrumb() string {
@@ -99,6 +112,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = msg.st
 		m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
 	case tea.KeyMsg:
+		if m.mode == modeAction {
+			return updateActionModeKey(m, msg)
+		}
 		return m.dispatchKey(msg)
 	}
 	return m, nil
@@ -144,6 +160,8 @@ func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
 		}
+	case tea.KeyCtrlA:
+		m.mode = modeAction
 	case tea.KeyRunes:
 		if len(msg.Runes) == 1 {
 			switch msg.Runes[0] {

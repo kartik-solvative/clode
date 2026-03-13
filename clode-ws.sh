@@ -169,9 +169,7 @@ _cws_cmd_new() {
   if _cws_session_exists "$project"; then
     echo "Session $session already exists — attaching."
   else
-    tmux new-session -d -s "$session" -c "$project_dir"
-    # Rename the default window to main:host-1
-    tmux rename-window -t "${session}:1" "main:host-1"
+    tmux new-session -d -s "$session" -c "$project_dir" -n "main:host-1"
     echo "Created session: $session"
   fi
 
@@ -290,6 +288,13 @@ _cws_new_clode_terminal() {
   local wname
   wname=$(_cws_window_name "$slug" "clode" "$n")
 
+  # Nod bridge — enables Claude Code hooks (PermissionRequest, Notification) on the host Mac
+  local nod_bridge="${_CLODE_WS_HOME}/Library/Application Support/Nod/nod-bridge"
+  local nod_args=()
+  if [[ -f "$nod_bridge" ]]; then
+    nod_args=(-v "${nod_bridge}:${nod_bridge}:ro" -e "NOD_HOST=host.docker.internal")
+  fi
+
   # Open a new tmux window that runs docker run -it directly (no -d + attach pattern)
   # No --rm so fg reattach works after closing the window
   tmux new-window -t "$session" -n "$wname" -c "$worktree_dir" \
@@ -301,6 +306,7 @@ _cws_new_clode_terminal() {
       -v "${_CLODE_WS_HOME}/.claude.json:${_CLODE_WS_HOME}/.claude.json" \
       -v "${_CLODE_WS_HOME}/.ssh:${_CLODE_WS_HOME}/.ssh:ro" \
       -v "${worktree_dir}:/workspace" \
+      "${nod_args[@]}" \
       --name "${container}" \
       --security-opt=no-new-privileges \
       --cap-drop=ALL \
@@ -477,8 +483,7 @@ _cws_navigate_worktree() {
   # Auto-create session if it doesn't exist
   if ! _cws_session_exists "$project"; then
     local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
-    tmux new-session -d -s "$session" -c "$project_dir"
-    tmux rename-window -t "${session}:1" "main:host-1"
+    tmux new-session -d -s "$session" -c "$project_dir" -n "main:host-1"
     # Must go to stderr — this function is called in $() subshell, stdout is the return value
     echo "Created session: $session" >&2
   fi

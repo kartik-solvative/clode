@@ -172,3 +172,16 @@ _clode_attach() {
   echo "clode: attaching to '$name'"
   docker exec -it "$name" claude --dangerously-skip-permissions --resume
 }
+
+_clode_stop() {
+  local name
+  name=$(_clode_name)
+
+  if ! _clode_exists "$name"; then
+    echo "clode: no container found for '$(pwd)'." >&2
+    return 1
+  fi
+
+  docker stop "$name" >/dev/null && docker rm "$name" >/dev/null 2>&1 || true
+  echo "clode: stopped '$name'"
+}

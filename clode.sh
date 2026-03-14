@@ -452,12 +452,24 @@ _clode_attach() {
 }
 
 _clode_stop() {
-  local name
-  name=$(_clode_name)
+  local -a names=()
+  while IFS= read -r _n; do [[ -n "$_n" ]] && names+=("$_n"); done \
+    < <(_clode_running_for_path)
 
-  if ! _clode_exists "$name"; then
+  local count=${#names[@]}
+
+  if [[ $count -eq 0 ]]; then
     echo "clode: no container found for '$(pwd)'." >&2
     return 1
+  fi
+
+  local name
+  if [[ $count -eq 1 ]]; then
+    name="${names[0]}"
+  else
+    if ! name=$(_clode_pick_container "${names[@]}"); then
+      return 1
+    fi
   fi
 
   docker stop "$name" >/dev/null && docker rm "$name" >/dev/null 2>&1 || true

@@ -222,3 +222,12 @@ _is_label() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"no running container"* ]]
 }
+
+# ── _clode_stop branching ─────────────────────────────────
+
+@test "_clode_stop: errors when no containers running" {
+  _clode_running_for_path() { return 0; }  # outputs nothing
+  run _clode_stop
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no container found"* ]]
+}

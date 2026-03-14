@@ -75,12 +75,23 @@ func newDetachedPrompt(project, worktree string, t *state.Terminal) *promptModel
 }
 
 // switchClientCmd switches the tmux client to "cws-<project>:<windowIndex>".
+// exec.Command has no controlling TTY, so tmux cannot detect the current client
+// automatically. We resolve the client name explicitly from the cws-ui session.
 func switchClientCmd(session string, windowIndex int) tea.Cmd {
 	return func() tea.Msg {
+		// Resolve the client attached to cws-ui (the session hosting this TUI).
+		out, err := exec.Command("tmux", "list-clients", "-t", "cws-ui", "-F", "#{client_name}").Output()
+		if err != nil {
+			return errMsg{fmt.Errorf("list-clients: %w", err)}
+		}
+		client := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
+		if client == "" {
+			return errMsg{fmt.Errorf("no client attached to cws-ui")}
+		}
 		target := fmt.Sprintf("%s:%d", session, windowIndex)
-		cmd := exec.Command("tmux", "switch-client", "-t", target)
+		cmd := exec.Command("tmux", "switch-client", "-c", client, "-t", target)
 		if err := cmd.Run(); err != nil {
-			return errMsg{err}
+			return errMsg{fmt.Errorf("switch-client %s: %w", target, err)}
 		}
 		return switchedMsg{}
 	}

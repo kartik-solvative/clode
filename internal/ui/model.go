@@ -163,6 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchedMsg, refreshMsg:
 		// no-op; state poller handles refresh
 	case tea.KeyMsg:
+		m.errBanner = "" // clear on any key
 		if m.mode == modeAction {
 			return updateActionModeKey(m, msg)
 		}
@@ -200,7 +201,12 @@ func (m Model) View() string {
 	divider := lipgloss.NewStyle().Foreground(lipgloss.Color("#3a6080")).Render("│")
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
-	return row + "\n" + renderBottomBar(m, m.width)
+	out := row + "\n" + renderBottomBar(m, m.width)
+	if m.errBanner != "" {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5f57")).Bold(true)
+		out += "\n" + errStyle.Render("error: "+m.errBanner)
+	}
+	return out
 }
 
 // dispatchKey handles key events in normal mode.

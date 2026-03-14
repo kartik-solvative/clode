@@ -14,6 +14,9 @@ setup() {
     [[ "$args" == *"label=clode.workspace=$(pwd)"* ]] || {
       echo "wrong docker args: $args" >&2; return 1
     }
+    [[ "$args" == *"{{.Names}}"* ]] || {
+      echo "wrong format arg: $args" >&2; return 1
+    }
     echo "myproject"
     echo "myproject-2"
   }
@@ -93,4 +96,5 @@ setup() {
   _clode_exists() { return 0; }
   run _clode_next_name "fix-auth"
   [ "$status" -ne 0 ]
+  [[ "$output" == *"already exists"* ]]
 }

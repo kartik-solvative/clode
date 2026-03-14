@@ -111,7 +111,7 @@ SUBCOMMANDS
   start [--bg] [prompt]  Explicitly start a new session
   attach                 Attach to running container (error if none)
   stop                   Stop and remove current project's container
-  list                   List all projects and container status
+  list [--all]           List running containers (--all includes stopped)
   update [--reconfigure] Pull latest image, update shell config
   help                   Show this help message
 
@@ -251,44 +251,50 @@ _clode_stop() {
 
 _clode_list() {
   _clode_load_config
+  local show_all=0
+  [[ "${1:-}" == "--all" ]] && show_all=1
 
-  if [[ ! -d "$CLODE_WORKSPACE" ]]; then
-    echo "clode: workspace '$CLODE_WORKSPACE' not found." >&2
-    return 1
-  fi
-
-  # Build a map of workspace_path -> container_name from running containers
-  declare -A running_map
+  # Running containers with clode.workspace label
+  local found=0
   while IFS='|' read -r cname wspath; do
-    [[ -n "$wspath" ]] && running_map["$wspath"]="$cname"
+    [[ -n "$cname" ]] || continue
+    found=1
+    local project
+    project=$(basename "$wspath")
+    local ports=""
+    while IFS='=' read -r key hport; do
+      [[ "$key" == clode.port.* ]] || continue
+      local cport="${key#clode.port.}"
+      ports="${ports:+$ports  }:${hport}→${cport}"
+    done < <(docker inspect --format \
+      '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
+      "$cname" 2>/dev/null | grep '^clode\.port\.')
+    printf "%-25s running    %s\n" "$project" "$ports"
   done < <(docker ps --filter "label=clode.workspace" \
     --format '{{.Names}}|{{.Label "clode.workspace"}}' 2>/dev/null)
 
-  for dir in "$CLODE_WORKSPACE"/*/; do
-    [[ -d "$dir" ]] || continue
-    local project
-    project=$(basename "$dir")
-    local abspath
-    abspath=$(cd "$dir" && pwd)
-    local cname="${running_map[$abspath]:-}"
+  if [[ $found -eq 0 && $show_all -eq 0 ]]; then
+    echo "No running clode containers. Use 'clode list --all' to see all projects."
+    return 0
+  fi
 
-    if [[ -n "$cname" ]]; then
-      local status
-      status=$(docker inspect --format '{{.State.Status}}' "$cname" 2>/dev/null || echo "unknown")
-      # Collect ports as compact "host→cport" tokens on one line
-      local ports=""
-      while IFS='=' read -r key hport; do
-        [[ "$key" == clode.port.* ]] || continue
-        local cport="${key#clode.port.}"
-        ports="${ports:+$ports  }:${hport}→${cport}"
-      done < <(docker inspect --format \
-        '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
-        "$cname" 2>/dev/null | grep '^clode\.port\.')
-      printf "%-25s %-10s %s\n" "$project" "$status" "$ports"
-    else
-      printf "%-25s %s\n" "$project" "stopped"
-    fi
-  done
+  # Stopped projects — only with --all
+  if [[ $show_all -eq 1 && -d "$CLODE_WORKSPACE" ]]; then
+    # Collect running workspace paths to skip them
+    declare -A running_paths
+    while IFS='|' read -r cname wspath; do
+      [[ -n "$wspath" ]] && running_paths["$wspath"]=1
+    done < <(docker ps --filter "label=clode.workspace" \
+      --format '{{.Names}}|{{.Label "clode.workspace"}}' 2>/dev/null)
+
+    for dir in "$CLODE_WORKSPACE"/*/; do
+      [[ -d "$dir" ]] || continue
+      local abspath
+      abspath=$(cd "$dir" && pwd)
+      [[ -n "${running_paths[$abspath]:-}" ]] && continue
+      printf "%-25s stopped\n" "$(basename "$dir")"
+    done
+  fi
 }
 
 _clode_update() {
@@ -334,7 +340,8 @@ clode() {
       _clode_stop
       ;;
     list)
-      _clode_list
+      shift
+      _clode_list "$@"
       ;;
     update)
       shift

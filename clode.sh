@@ -68,10 +68,16 @@ _clode_base_args() {
   # Shared clipboard directory: 'cpaste' on Mac writes here; Claude reads /tmp/clode-clipboard inside Docker
   mkdir -p "$HOME/.clode/clipboard" 2>/dev/null || true
   printf -- '-v\n%s:/tmp/clode-clipboard\n' "$HOME/.clode/clipboard"
-  printf -- '-v\n%s:/workspace\n' "$(pwd)"
-  # Inject Docker-environment instructions so Claude knows about 0.0.0.0, ports, etc.
-  if [[ -f "$_CLODE_DIR/CLAUDE.md" ]]; then
-    printf -- '-v\n%s:/workspace/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md"
+  # Mount project at its actual host path (not /workspace) so Claude Code's
+  # session history and memory are keyed by the same path on host and in Docker.
+  # -w sets the working directory to match, making /resume find the right sessions.
+  local _pwd
+  _pwd="$(pwd)"
+  printf -- '-v\n%s:%s\n' "$_pwd" "$_pwd"
+  printf -- '-w\n%s\n' "$_pwd"
+  # Inject Docker-environment instructions — only if project has no CLAUDE.md of its own.
+  if [[ -f "$_CLODE_DIR/CLAUDE.md" && ! -f "$_pwd/CLAUDE.md" ]]; then
+    printf -- '-v\n%s:%s/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md" "$_pwd"
   fi
   printf -- '--name\n%s\n' "$name"
   printf -- '--label\nclode.workspace=%s\n' "$(pwd)"

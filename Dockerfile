@@ -22,7 +22,8 @@ RUN npm install -g @anthropic-ai/claude-code
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Set the working directory
+# Default workdir — overridden at runtime by clode's -w flag to the actual project path.
+# This ensures Claude Code session history is keyed by the same path on host and in Docker.
 WORKDIR /workspace
 
 # Default to non-root user, but allow override via -u flag

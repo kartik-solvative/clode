@@ -157,10 +157,10 @@ BROWSER
                                Claude inside Docker connects via $CHROME_CDP_URL
                                (Headless Chromium is also available inside Docker)
 
-CLIPBOARD (images)
-  cpaste                       Save macOS clipboard image → /tmp/clode-clipboard/
-                               Claude inside Docker can read it there.
-                               Tip: brew install pngpaste (optional, faster)
+CLIPBOARD
+  cpaste                       Copy clipboard → /tmp/clode-clipboard/
+                               Handles: files (Finder Cmd+C), images, text
+                               Tip: brew install pngpaste (faster image paste)
 
 EXAMPLES
   clode                        Start or attach (smart default)
@@ -405,44 +405,78 @@ chrome-debug() {
   echo "              Connect from Docker via: \$CHROME_CDP_URL"
 }
 
-# ── cpaste — clipboard image bridge ───────────────────────
-# Saves the macOS clipboard image to ~/.clode/clipboard/
+# ── cpaste — clipboard bridge (files, images, text) ───────
+# Copies whatever is on the macOS clipboard into ~/.clode/clipboard/
 # so Claude running inside Docker can read it at /tmp/clode-clipboard/
+#
+# Priority: file references (Finder Cmd+C) → image → text
 cpaste() {
   local dir="$HOME/.clode/clipboard"
   mkdir -p "$dir"
   local timestamp
   timestamp=$(date +%Y%m%d_%H%M%S)
-  local file="$dir/clipboard_${timestamp}.png"
-  local latest="$dir/clipboard.png"
 
-  # Try pngpaste first (brew install pngpaste — fast, no AppleScript overhead)
-  if command -v pngpaste >/dev/null 2>&1; then
-    if pngpaste "$file" 2>/dev/null; then
-      cp "$file" "$latest"
-      echo "cpaste: saved to /tmp/clode-clipboard/clipboard_${timestamp}.png"
-      echo "        (also available as /tmp/clode-clipboard/clipboard.png)"
-      return 0
-    fi
-    echo "cpaste: no image in clipboard" >&2
-    return 1
+  # ── 1. File references (files copied in Finder) ──────────
+  local filepaths
+  filepaths=$(osascript 2>/dev/null <<'APPLESCRIPT'
+    try
+      set theClip to (the clipboard as «class furl»)
+      if class of theClip is list then
+        set out to ""
+        repeat with f in theClip
+          set out to out & POSIX path of f & linefeed
+        end repeat
+        return out
+      else
+        return POSIX path of theClip
+      end if
+    end try
+    return ""
+APPLESCRIPT
+  )
+  if [[ -n "$filepaths" ]]; then
+    while IFS= read -r fp; do
+      [[ -z "$fp" ]] && continue
+      cp -r "$fp" "$dir/"
+      echo "cpaste: /tmp/clode-clipboard/$(basename "$fp")"
+    done <<< "$filepaths"
+    return 0
   fi
 
-  # Fall back to osascript (no extra install required)
-  if osascript 2>/dev/null <<APPLESCRIPT
+  # ── 2. Image ──────────────────────────────────────────────
+  local imgfile="$dir/clipboard_${timestamp}.png"
+  if command -v pngpaste >/dev/null 2>&1; then
+    if pngpaste "$imgfile" 2>/dev/null; then
+      cp "$imgfile" "$dir/clipboard.png"
+      echo "cpaste: /tmp/clode-clipboard/clipboard_${timestamp}.png"
+      echo "        (also: /tmp/clode-clipboard/clipboard.png)"
+      return 0
+    fi
+  elif osascript 2>/dev/null <<APPLESCRIPT
     set imgData to (the clipboard as «class PNGf»)
-    set f to open for access POSIX file "$file" with write permission
+    set f to open for access POSIX file "$imgfile" with write permission
     write imgData to f
     close access f
 APPLESCRIPT
   then
-    cp "$file" "$latest"
-    echo "cpaste: saved to /tmp/clode-clipboard/clipboard_${timestamp}.png"
-    echo "        (also available as /tmp/clode-clipboard/clipboard.png)"
-    echo "        Tip: brew install pngpaste for faster clipboard reads"
+    cp "$imgfile" "$dir/clipboard.png"
+    echo "cpaste: /tmp/clode-clipboard/clipboard_${timestamp}.png"
+    echo "        (also: /tmp/clode-clipboard/clipboard.png)"
     return 0
   fi
 
-  echo "cpaste: no image in clipboard (or clipboard contains non-image data)" >&2
+  # ── 3. Text ───────────────────────────────────────────────
+  local text
+  text=$(pbpaste 2>/dev/null)
+  if [[ -n "$text" ]]; then
+    local txtfile="$dir/clipboard_${timestamp}.txt"
+    printf '%s' "$text" > "$txtfile"
+    cp "$txtfile" "$dir/clipboard.txt"
+    echo "cpaste: /tmp/clode-clipboard/clipboard_${timestamp}.txt"
+    echo "        (also: /tmp/clode-clipboard/clipboard.txt)"
+    return 0
+  fi
+
+  echo "cpaste: clipboard is empty or type not supported" >&2
   return 1
 }

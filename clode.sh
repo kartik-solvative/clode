@@ -150,12 +150,15 @@ USAGE
   clode <subcommand> [args]
 
 SUBCOMMANDS
-  start [--bg] [prompt]  Explicitly start a new session
-  attach                 Attach to running container (error if none)
-  stop                   Stop and remove current project's container
-  list [--all]           List running containers (--all includes stopped)
-  update [--reconfigure] Pull latest image, update shell config
-  help                   Show this help message
+  start [--bg] [prompt]       Explicitly start a new session
+  attach                      Attach to running container (error if none)
+  stop                        Stop and remove current project's container
+  list [--all]                List running containers (--all includes stopped)
+  worktree add <branch>       Create worktree + start Claude in it
+  worktree remove             Stop container + remove current worktree
+  worktree list               List all worktrees for this project
+  update [--reconfigure]      Pull latest image, update shell config
+  help                        Show this help message
 
 FLAGS (start / default run)
   --bg              Run in background (non-interactive)
@@ -339,6 +342,60 @@ _clode_list() {
   fi
 }
 
+_clode_worktree() {
+  local subcmd="${1:-}"
+  shift || true
+  case "$subcmd" in
+    add)
+      local branch="${1:-}"
+      if [[ -z "$branch" ]]; then
+        echo "Usage: clode worktree add <branch>" >&2
+        return 1
+      fi
+      if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "clode: not a git repository" >&2
+        return 1
+      fi
+      if [[ "$(pwd)" == */.worktrees/* ]]; then
+        echo "clode: already inside a worktree — run from the main project directory" >&2
+        return 1
+      fi
+      local slug="${branch//\//-}"
+      local wt_path=".worktrees/$slug"
+      mkdir -p .worktrees
+      # Try new branch first, fall back to checking out existing branch
+      if ! git worktree add "$wt_path" -b "$branch" 2>/dev/null; then
+        git worktree add "$wt_path" "$branch" || return 1
+      fi
+      echo "clode: worktree ready at $wt_path"
+      cd "$wt_path" || return 1
+      _clode_start "$@"
+      ;;
+    remove)
+      if [[ "$(pwd)" != */.worktrees/* ]]; then
+        echo "clode: not inside a worktree" >&2
+        return 1
+      fi
+      local wt_path
+      wt_path="$(pwd)"
+      local project_root="${wt_path%%/.worktrees/*}"
+      _clode_stop 2>/dev/null || true
+      cd "$project_root" || return 1
+      git worktree remove "$wt_path" --force
+      echo "clode: removed worktree $wt_path"
+      ;;
+    list)
+      git worktree list 2>/dev/null || { echo "clode: not a git repository" >&2; return 1; }
+      ;;
+    *)
+      echo "Usage: clode worktree add <branch>  — create worktree + start Claude" >&2
+      echo "       clode worktree remove        — stop container + remove worktree" >&2
+      echo "       clode worktree list          — list all worktrees" >&2
+      return 1
+      ;;
+  esac
+}
+
 _clode_update() {
   _clode_load_config
   local reconfigure=0
@@ -384,6 +441,10 @@ clode() {
     list)
       shift
       _clode_list "$@"
+      ;;
+    worktree)
+      shift
+      _clode_worktree "$@"
       ;;
     update)
       shift

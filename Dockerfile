@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
 # PLAYWRIGHT_BROWSERS_PATH=/ms-playwright makes it available to all users
 # and all projects inside the container (no per-project re-download needed).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# --no-sandbox is required because Docker drops kernel capabilities Chrome's
+# sandbox needs. DISABLE_DEV_SHM avoids crashes on low /dev/shm allocations.
+ENV PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
 RUN npx --yes playwright@latest install --with-deps chromium \
     && chmod -R a+rx /ms-playwright
 

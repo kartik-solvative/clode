@@ -76,23 +76,40 @@ func newDetachedPrompt(project, worktree string, t *state.Terminal) *promptModel
 }
 
 // switchClientCmd selects a window by name then switches the tmux client to the session.
-// Mirrors _cws_goto in clode-ws.sh: select-window first (no TTY needed), then
-// switch-client with /dev/tty so tmux can identify the current client.
+// /dev/tty inside a tmux pane is the internal pty, not the external client terminal,
+// so tmux cannot resolve the client from it. Instead we query list-clients (pure server
+// query — no TTY needed) to find the client attached to cws-ui, then use -c explicitly.
 func switchClientCmd(session, windowName string) tea.Cmd {
 	return func() tea.Msg {
-		// Step 1: select the window by exact name ("=" avoids ":" being parsed as pane separator).
+		// Step 1: select the window by exact name ("=" avoids ":" parsed as pane separator).
 		selectTarget := session + ":=" + windowName
 		if err := exec.Command("tmux", "select-window", "-t", selectTarget).Run(); err != nil {
 			return errMsg{fmt.Errorf("select-window %s: %w", selectTarget, err)}
 		}
-		// Step 2: switch the client to the session (TTY needed to identify which client).
-		switchCmd := exec.Command("tmux", "switch-client", "-t", session)
-		if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
-			switchCmd.Stdin = tty
-			defer tty.Close()
+		// Step 2: resolve the client attached to cws-ui.
+		out, err := exec.Command("tmux", "list-clients", "-F", "#{client_name} #{client_session}").Output()
+		if err != nil {
+			return errMsg{fmt.Errorf("list-clients: %w", err)}
 		}
-		if err := switchCmd.Run(); err != nil {
-			return errMsg{fmt.Errorf("switch-client %s: %w", session, err)}
+		client := ""
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) == 2 && parts[1] == "cws-ui" {
+				client = parts[0]
+				break
+			}
+		}
+		// Fallback: use first client if cws-ui not found (e.g. launched outside cws shell fn).
+		if client == "" {
+			first := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
+			client = strings.SplitN(first, " ", 2)[0]
+		}
+		if client == "" {
+			return errMsg{fmt.Errorf("no tmux client found")}
+		}
+		// Step 3: switch that client to the target session.
+		if err := exec.Command("tmux", "switch-client", "-c", client, "-t", session).Run(); err != nil {
+			return errMsg{fmt.Errorf("switch-client -c %s -t %s: %w", client, session, err)}
 		}
 		return switchedMsg{}
 	}

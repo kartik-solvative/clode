@@ -67,25 +67,59 @@ func updateActionModeKey(m Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		// Capture the current node context before modifying mode.
+		var n node
+		if m.cursor < len(m.nodes) {
+			n = m.nodes[m.cursor]
+		}
 		switch msg.Runes[0] {
-		case 'n', 'c':
+		case 'n':
 			m.mode = modeNormal
-			// Actions wired in Task 9
+			return m, newHostTerminalCmd(n.project, n.worktree)
+		case 'c':
+			m.mode = modeNormal
+			return m, newClodeTerminalCmd(n.project, n.worktree)
 		case 'w':
+			project := n.project
 			m.mode = modePrompt
-			m.prompt = newTextPrompt("branch:", nil)
+			m.prompt = newTextPrompt("branch:", func(branch string) tea.Cmd {
+				return newWorktreeCmd(project, branch)
+			})
 		case 'd':
+			project := n.project
+			worktree := n.worktree
+			terminal := n.terminal
 			m.mode = modePrompt
-			m.prompt = newConfirmPrompt("delete terminal? y/N", nil)
+			m.prompt = newConfirmPrompt("delete terminal? y/N", func(confirmed bool) tea.Cmd {
+				if confirmed && terminal != nil {
+					return deleteTerminalCmd(project, worktree, terminal)
+				}
+				return nil
+			})
 		case 'D':
+			project := n.project
+			worktree := n.worktree
 			m.mode = modePrompt
-			m.prompt = newConfirmPrompt("delete worktree? y/N", nil)
+			m.prompt = newConfirmPrompt("delete worktree? y/N", func(confirmed bool) tea.Cmd {
+				if confirmed {
+					return deleteWorktreeCmd(project, worktree)
+				}
+				return nil
+			})
 		case 'X':
+			project := n.project
 			m.mode = modePrompt
-			m.prompt = newConfirmPrompt("kill project? y/N", nil)
+			m.prompt = newConfirmPrompt("kill project? y/N", func(confirmed bool) tea.Cmd {
+				if confirmed {
+					return killProjectCmd(project)
+				}
+				return nil
+			})
 		case 'f':
 			m.mode = modeNormal
-			// Fg action wired in Task 9
+			if n.terminal != nil {
+				return m, fgReattachCmd(n.project, n.worktree, n.terminal.Container)
+			}
 		}
 	}
 	return m, nil

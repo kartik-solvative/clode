@@ -354,6 +354,68 @@ func TestPaletteCursorNavigation(t *testing.T) {
 	}
 }
 
+func TestEnterOnRunningTerminalProducesCmd(t *testing.T) {
+	m := ui.New(twoProjectState())
+	var next tea.Model
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("want a tea.Cmd (switch-client) for running terminal Enter, got nil")
+	}
+}
+
+func TestEnterOnDetachedTerminalEntersPromptMode(t *testing.T) {
+	st := &state.State{
+		Projects: []state.Project{{
+			Name: "focusreader", HasSession: true,
+			Worktrees: []state.Worktree{{
+				Slug: "main",
+				Terminals: []state.Terminal{
+					{Name: "clode-1", Type: state.TypeClode, Status: state.StatusDetached,
+						WindowIndex: -1, Container: "cws-focusreader-main-clode"},
+				},
+			}},
+		}},
+	}
+	m := ui.New(st)
+	var next tea.Model
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(ui.Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(ui.Model)
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	nm := next.(ui.Model)
+	if nm.Mode() != ui.ModePrompt {
+		t.Errorf("want ModePrompt after Enter on detached terminal, got %v", nm.Mode())
+	}
+}
+
+func TestEnterOnNoSessionProjectCreatesSession(t *testing.T) {
+	m := ui.New(twoProjectState())
+	var next tea.Model
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // payments-api (no session)
+	m = next.(ui.Model)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("want a tea.Cmd (create session) for [no session] project Enter, got nil")
+	}
+}
+
 func TestActionModeContextKeys_DetachedTerminalSelected(t *testing.T) {
 	st := &state.State{
 		Projects: []state.Project{{

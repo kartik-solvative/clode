@@ -40,6 +40,10 @@ type stateMsg struct{ st *state.State }
 // StateMsg is the exported type alias so main.go can send it.
 type StateMsg = stateMsg
 
+type errMsg struct{ err error }
+type switchedMsg struct{}
+type refreshMsg struct{}
+
 // Model is the root bubbletea model.
 type Model struct {
 	state             *state.State
@@ -53,6 +57,7 @@ type Model struct {
 	expandedWorktrees map[string]bool
 	prompt            *promptModel
 	palette           *paletteModel
+	errBanner         string
 }
 
 // New creates a Model from the given state. All nodes start collapsed.
@@ -137,6 +142,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateMsg:
 		m.state = msg.st
 		m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
+	case errMsg:
+		m.errBanner = msg.err.Error()
+	case switchedMsg, refreshMsg:
+		// no-op; state poller handles refresh
 	case tea.KeyMsg:
 		if m.mode == modeAction {
 			return updateActionModeKey(m, msg)
@@ -192,6 +201,8 @@ func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
 		}
+	case tea.KeyEnter:
+		return handleEnter(m)
 	case tea.KeyCtrlA:
 		m.mode = modeAction
 	case tea.KeyRunes:

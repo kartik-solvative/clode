@@ -37,7 +37,8 @@ func handleEnter(m Model) (tea.Model, tea.Cmd) {
 		switch n.terminal.Status {
 		case state.StatusRunning:
 			session := "cws-" + n.project
-			return m, switchClientCmd(session, n.terminal.WindowIndex)
+			windowName := n.worktree + ":" + n.terminal.Name
+			return m, switchClientCmd(session, windowName)
 		case state.StatusDetached:
 			m.mode = modePrompt
 			m.prompt = newDetachedPrompt(n.project, n.worktree, n.terminal)
@@ -74,20 +75,24 @@ func newDetachedPrompt(project, worktree string, t *state.Terminal) *promptModel
 	)
 }
 
-// switchClientCmd switches the tmux client to "cws-<project>:<windowIndex>".
-// tmux needs a controlling TTY to identify which client to switch. exec.Command
-// children don't inherit one, so we open /dev/tty explicitly as stdin.
-func switchClientCmd(session string, windowIndex int) tea.Cmd {
+// switchClientCmd selects a window by name then switches the tmux client to the session.
+// Mirrors _cws_goto in clode-ws.sh: select-window first (no TTY needed), then
+// switch-client with /dev/tty so tmux can identify the current client.
+func switchClientCmd(session, windowName string) tea.Cmd {
 	return func() tea.Msg {
-		target := fmt.Sprintf("%s:%d", session, windowIndex)
-		cmd := exec.Command("tmux", "switch-client", "-t", target)
-		// Give tmux a TTY so it can identify the current client.
+		// Step 1: select the window by exact name ("=" avoids ":" being parsed as pane separator).
+		selectTarget := session + ":=" + windowName
+		if err := exec.Command("tmux", "select-window", "-t", selectTarget).Run(); err != nil {
+			return errMsg{fmt.Errorf("select-window %s: %w", selectTarget, err)}
+		}
+		// Step 2: switch the client to the session (TTY needed to identify which client).
+		switchCmd := exec.Command("tmux", "switch-client", "-t", session)
 		if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
-			cmd.Stdin = tty
+			switchCmd.Stdin = tty
 			defer tty.Close()
 		}
-		if err := cmd.Run(); err != nil {
-			return errMsg{fmt.Errorf("switch-client %s: %w", target, err)}
+		if err := switchCmd.Run(); err != nil {
+			return errMsg{fmt.Errorf("switch-client %s: %w", session, err)}
 		}
 		return switchedMsg{}
 	}

@@ -86,26 +86,20 @@ func switchClientCmd(session, windowName string) tea.Cmd {
 		if err := exec.Command("tmux", "select-window", "-t", selectTarget).Run(); err != nil {
 			return errMsg{fmt.Errorf("select-window %s: %w", selectTarget, err)}
 		}
-		// Step 2: resolve the client attached to cws-ui.
-		out, err := exec.Command("tmux", "list-clients", "-F", "#{client_name} #{client_session}").Output()
+		// Step 2: resolve the client name via $TMUX_PANE.
+		// display-message -t <pane> -p queries the server for the client attached to
+		// that pane's session — works from a subprocess with no TTY or client context.
+		pane := os.Getenv("TMUX_PANE")
+		if pane == "" {
+			return errMsg{fmt.Errorf("$TMUX_PANE not set — run cws-tui via the cws shell function")}
+		}
+		out, err := exec.Command("tmux", "display-message", "-t", pane, "-p", "#{client_name}").Output()
 		if err != nil {
-			return errMsg{fmt.Errorf("list-clients: %w", err)}
+			return errMsg{fmt.Errorf("display-message: %w", err)}
 		}
-		client := ""
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			parts := strings.SplitN(line, " ", 2)
-			if len(parts) == 2 && parts[1] == "cws-ui" {
-				client = parts[0]
-				break
-			}
-		}
-		// Fallback: use first client if cws-ui not found (e.g. launched outside cws shell fn).
+		client := strings.TrimSpace(string(out))
 		if client == "" {
-			first := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
-			client = strings.SplitN(first, " ", 2)[0]
-		}
-		if client == "" {
-			return errMsg{fmt.Errorf("no tmux client found")}
+			return errMsg{fmt.Errorf("no client for pane %s", pane)}
 		}
 		// Step 3: switch that client to the target session.
 		if err := exec.Command("tmux", "switch-client", "-c", client, "-t", session).Run(); err != nil {

@@ -500,7 +500,7 @@ _clode_list() {
     done < <(docker inspect --format \
       '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
       "$cname" 2>/dev/null | grep '^clode\.port\.')
-    printf "%-25s running    %s\n" "$project" "$ports"
+    printf "%-25s running    %s\n" "$cname" "$ports"
   done < <(docker ps --filter "label=clode.workspace" \
     --format '{{.Names}}|{{.Label "clode.workspace"}}' 2>/dev/null)
 

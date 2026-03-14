@@ -223,6 +223,23 @@ _is_label() {
   [[ "$output" == *"no running container"* ]]
 }
 
+@test "_clode_attach: attaches directly when one container running" {
+  _clode_running_for_path() { echo "myproject"; }
+  docker() { :; }
+  run _clode_attach
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"attaching to 'myproject'"* ]]
+}
+
+@test "_clode_attach: uses picker result when multiple containers running" {
+  _clode_running_for_path() { printf 'myproject\nmyproject-2\n'; }
+  _clode_pick_container() { echo "myproject-2"; }
+  docker() { :; }
+  run _clode_attach
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"attaching to 'myproject-2'"* ]]
+}
+
 # ── _clode_stop branching ─────────────────────────────────
 
 @test "_clode_stop: errors when no containers running" {
@@ -230,6 +247,23 @@ _is_label() {
   run _clode_stop
   [ "$status" -ne 0 ]
   [[ "$output" == *"no container found"* ]]
+}
+
+@test "_clode_stop: stops directly when one container running" {
+  _clode_running_for_path() { echo "myproject"; }
+  docker() { :; }
+  run _clode_stop
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stopped 'myproject'"* ]]
+}
+
+@test "_clode_stop: uses picker result when multiple containers running" {
+  _clode_running_for_path() { printf 'myproject\nmyproject-2\n'; }
+  _clode_pick_container() { echo "myproject-2"; }
+  docker() { :; }
+  run _clode_stop
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stopped 'myproject-2'"* ]]
 }
 
 # ── smart default branching ───────────────────────────────

@@ -1,6 +1,6 @@
 BIN         := bin/cws-tui
 INSTALL_DIR := $(HOME)/bin
-CWS_SCRIPT  := $(HOME)/Projects/clode/clode-ws.sh
+CWS_SCRIPT  := clode-ws.sh
 
 .PHONY: build install test clean smoke
 

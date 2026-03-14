@@ -163,6 +163,11 @@ _cws_cmd_new() {
     return 1
   fi
 
+  if ! command -v cws-tui &>/dev/null; then
+    echo "cws-tui not found — run: make -C ~/Projects/clode install" >&2
+    return 1
+  fi
+
   local session
   session=$(_cws_session_name "$project")
 
@@ -173,11 +178,7 @@ _cws_cmd_new() {
     echo "Created session: $session"
   fi
 
-  # Open navigator: worktree picker → terminal picker
-  local slug
-  slug=$(_cws_navigate_worktree "$project") || return 0
-  [[ -z "$slug" ]] && return 0
-  _cws_navigate_terminal "$project" "$slug"
+  CWS_SELECT_PROJECT="$project" cws
 }
 
 # Kill a clode-ws session and all its containers.
@@ -421,150 +422,6 @@ _cws_delete_worktree() {
   fi
 }
 
-_cws_navigate_project() {
-  # Build merged list: active sessions first (●), then inactive git repos (○)
-  local active_projects=()
-  while IFS= read -r session; do
-    active_projects+=("${session#cws-}")
-  done < <(_cws_sessions)
-
-  local lines=()
-
-  # Active sessions first
-  for p in "${active_projects[@]}"; do
-    lines+=("● $p")
-  done
-
-  # All git repos not already listed
-  while IFS= read -r project; do
-    local already=0
-    for ap in "${active_projects[@]}"; do
-      [[ "$ap" == "$project" ]] && already=1 && break
-    done
-    [[ $already -eq 0 ]] && lines+=("○ $project")
-  done < <(_cws_projects)
-
-  # tmux-only sessions (session exists but no ~/Projects/<project>/)
-  for p in "${active_projects[@]}"; do
-    if [[ ! -d "${_CLODE_WS_PROJECTS_DIR}/${p}" ]]; then
-      # Replace the ● entry with a [tmux only] label
-      for i in "${!lines[@]}"; do
-        [[ "${lines[$i]}" == "● $p" ]] && lines[$i]="● $p [tmux only]"
-      done
-    fi
-  done
-
-  if [[ ${#lines[@]} -eq 0 ]]; then
-    echo "No projects found in ${_CLODE_WS_PROJECTS_DIR}" >&2
-    return 1
-  fi
-
-  local choice
-  choice=$(printf '%s\n' "${lines[@]}" | fzf \
-    --height=50% --border \
-    --prompt="project > " \
-    --header="clode-ws — select project") || return 0
-
-  [[ -z "$choice" ]] && return 0
-
-  # Strip the ● / ○ prefix and any [tmux only] label
-  local project="${choice#● }"
-  project="${project#○ }"
-  project="${project% \[tmux only\]}"
-
-  echo "$project"
-}
-
-_cws_navigate_worktree() {
-  local project="$1"
-  local session
-  session=$(_cws_session_name "$project")
-
-  # Auto-create session if it doesn't exist
-  if ! _cws_session_exists "$project"; then
-    local project_dir="${_CLODE_WS_PROJECTS_DIR}/${project}"
-    tmux new-session -d -s "$session" -c "$project_dir" -n "main:host-1"
-    # Must go to stderr — this function is called in $() subshell, stdout is the return value
-    echo "Created session: $session" >&2
-  fi
-
-  local worktrees
-  worktrees=$(_cws_worktrees "$project")
-
-  if [[ -z "$worktrees" ]]; then
-    echo "No worktrees found for $project" >&2
-    return 1
-  fi
-
-  local choice
-  choice=$(echo "$worktrees" | fzf \
-    --height=50% --border \
-    --prompt="worktree > " \
-    --header="${project} — select worktree") || return 0
-
-  [[ -z "$choice" ]] && return 0
-  echo "$choice"
-}
-
-_cws_navigate_terminal() {
-  local project="$1" slug="$2"
-  local session
-  session=$(_cws_session_name "$project")
-  local container
-  container=$(_cws_container_name "$project" "$slug")
-
-  local options=()
-
-  # Existing tmux windows for this worktree
-  while IFS= read -r wname; do
-    [[ -z "$wname" ]] && continue
-    options+=("● $wname")
-  done < <(_cws_windows "$session" "$slug")
-
-  # Detached clode container: running in Docker but no tmux window for this worktree
-  # Exact name match — docker --filter name= is substring-only, so post-filter with grep
-  if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^${container}$"; then
-    if ! _cws_windows "$session" "$slug" | grep -q ":clode-"; then
-      options+=("◎ ${slug}:clode [detached] — fg to reattach")
-    fi
-  fi
-
-  options+=("+ new host terminal")
-  options+=("+ new clode terminal")
-  options+=("+ new worktree")
-  [[ "$slug" != "main" ]] && options+=("+ delete worktree")
-
-  local choice
-  choice=$(printf '%s\n' "${options[@]}" | fzf \
-    --height=60% --border \
-    --prompt="${project}/${slug} > " \
-    --header="select terminal or action") || return 0
-
-  [[ -z "$choice" ]] && return 0
-
-  case "$choice" in
-    "● "*)
-      local wname="${choice#● }"
-      _cws_goto "$session" "$wname"
-      ;;
-    "◎ "*"[detached]"*)
-      _cws_fg_clode "$project" "$slug"
-      ;;
-    "+ new host terminal")
-      _cws_new_host_terminal "$project" "$slug"
-      ;;
-    "+ new clode terminal")
-      _cws_new_clode_terminal "$project" "$slug"
-      ;;
-    "+ new worktree")
-      _cws_add_worktree "$project"
-      ;;
-    "+ delete worktree")
-      _cws_delete_worktree "$project" "$slug"
-      ;;
-  esac
-}
-
 clode-ws() {
   case "${1:-}" in
     new)
@@ -582,16 +439,7 @@ clode-ws() {
       _cws_cmd_prune
       ;;
     ""|-*)
-      # No subcommand — open the full 3-step navigator
-      local project
-      project=$(_cws_navigate_project) || return 0
-      [[ -z "$project" ]] && return 0
-
-      local slug
-      slug=$(_cws_navigate_worktree "$project") || return 0
-      [[ -z "$slug" ]] && return 0
-
-      _cws_navigate_terminal "$project" "$slug"
+      cws
       ;;
     *)
       echo "Usage: clode-ws [new|kill|list|prune] [args]" >&2
@@ -600,5 +448,24 @@ clode-ws() {
   esac
 }
 
-# Short alias
-cws() { clode-ws "$@"; }
+cws() {
+  if ! command -v cws-tui &>/dev/null; then
+    echo "cws-tui not found — run: make -C ~/Projects/clode install" >&2
+    return 1
+  fi
+  local prefix
+  prefix=$(tmux show-option -gv prefix 2>/dev/null)
+  if [[ "$prefix" == "C-a" ]]; then
+    echo "warning: tmux prefix is Ctrl+A — action mode (Ctrl+A) will not work." >&2
+    echo "Change tmux prefix to Ctrl+B or set _CLODE_WS_ACTION_KEY. See clode-ws.sh." >&2
+  fi
+  if ! tmux has-session -t cws-ui 2>/dev/null; then
+    tmux new-session -d -s cws-ui -n cws-panel
+    tmux send-keys -t cws-ui:cws-panel "cws-tui" Enter
+  fi
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t cws-ui
+  else
+    tmux attach-session -t cws-ui
+  fi
+}

@@ -416,6 +416,46 @@ func TestEnterOnNoSessionProjectCreatesSession(t *testing.T) {
 	}
 }
 
+func TestWithPreselectExpandsAndFocusesProject(t *testing.T) {
+	m := ui.New(twoProjectState())
+	initialCount := m.VisibleCount()
+
+	m = m.WithPreselect("focusreader")
+
+	if m.VisibleCount() <= initialCount {
+		t.Errorf("WithPreselect should expand project; VisibleCount was %d, now %d",
+			initialCount, m.VisibleCount())
+	}
+	if m.Cursor() != 0 {
+		t.Errorf("WithPreselect should focus project at cursor 0, got %d", m.Cursor())
+	}
+}
+
+func TestWithPreselectUnknownProjectIsNoop(t *testing.T) {
+	m := ui.New(twoProjectState())
+	before := m.Cursor()
+	m = m.WithPreselect("nonexistent-project")
+	if m.Cursor() != before {
+		t.Errorf("WithPreselect for unknown project should not change cursor")
+	}
+}
+
+func TestStateMsgRefreshesNodeList(t *testing.T) {
+	m := ui.New(twoProjectState())
+	initialCount := m.VisibleCount()
+
+	newSt := &state.State{
+		Projects: append(twoProjectState().Projects,
+			state.Project{Name: "new-project", HasSession: false}),
+	}
+	next, _ := m.Update(ui.StateMsg(newSt))
+	nm := next.(ui.Model)
+
+	if nm.VisibleCount() <= initialCount {
+		t.Errorf("StateMsg should update node list; was %d, now %d", initialCount, nm.VisibleCount())
+	}
+}
+
 func TestActionModeContextKeys_DetachedTerminalSelected(t *testing.T) {
 	st := &state.State{
 		Projects: []state.Project{{

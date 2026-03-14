@@ -4,6 +4,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"cws-tui/internal/state"
 )
@@ -35,10 +36,12 @@ type node struct {
 }
 
 // stateMsg carries a fresh *state.State for the 2s poller.
-type stateMsg struct{ st *state.State }
+// It is defined as a named type over *state.State so that
+// ui.StateMsg(ptr) works as a simple type conversion in main.go and tests.
+type stateMsg = StateMsg
 
-// StateMsg is the exported type alias so main.go can send it.
-type StateMsg = stateMsg
+// StateMsg is the exported type so main.go and tests can send it via StateMsg(ptr).
+type StateMsg *state.State
 
 type errMsg struct{ err error }
 type switchedMsg struct{}
@@ -131,6 +134,19 @@ func (m Model) PreviewBreadcrumb() string {
 	return n.project + " › " + n.worktree + " › " + n.terminal.Name
 }
 
+// WithPreselect expands and focuses the named project on startup.
+func (m Model) WithPreselect(project string) Model {
+	for i, n := range m.nodes {
+		if n.kind == nodeProject && n.project == project {
+			m.cursor = i
+			m.expandedProjects[project] = true
+			m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
+			return m
+		}
+	}
+	return m
+}
+
 // Init starts the 2s tick (implemented in main.go poller; this is a no-op stub).
 func (m Model) Init() tea.Cmd { return nil }
 
@@ -139,8 +155,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-	case stateMsg:
-		m.state = msg.st
+	case StateMsg:
+		m.state = (*state.State)(msg)
 		m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
 	case errMsg:
 		m.errBanner = msg.err.Error()
@@ -161,9 +177,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the full TUI (split pane). Implemented fully in Task 10.
+// View renders the full TUI (split pane).
 func (m Model) View() string {
-	return renderTree(m, m.width)
+	if m.width == 0 {
+		return "loading...\n"
+	}
+	leftWidth := m.width * 35 / 100
+	rightWidth := m.width - leftWidth - 1
+
+	left := renderTree(m, leftWidth)
+
+	switch m.mode {
+	case modeAction:
+		left = renderActionMode(m, leftWidth)
+	case modePalette:
+		left = renderPaletteOverlay(m.palette, leftWidth)
+	case modePrompt:
+		left = renderPromptOverlay(m.prompt, leftWidth)
+	}
+
+	right := renderPreview(m, rightWidth)
+	divider := lipgloss.NewStyle().Foreground(lipgloss.Color("#3a6080")).Render("│")
+
+	row := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
+	return row + "\n" + renderBottomBar(m, m.width)
 }
 
 // dispatchKey handles key events in normal mode.

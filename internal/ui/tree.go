@@ -71,6 +71,13 @@ func renderNode(n node, selected bool, width int) string {
 	return row
 }
 
+// renderBottomBar renders the bottom key hints bar.
+func renderBottomBar(m Model, width int) string {
+	style := lipgloss.NewStyle().Background(lipgloss.Color("#1e3347")).Foreground(lipgloss.Color("#aac8e0")).Width(width)
+	hints := "  ↑↓ navigate  ·  ↵ jump in  ·  Ctrl+A action  ·  space palette  ·  q quit"
+	return style.Render(hints)
+}
+
 // dotStyle returns a colored status dot for a terminal.
 func dotStyle(t *state.Terminal) string {
 	if t == nil {

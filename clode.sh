@@ -57,6 +57,16 @@ _clode_base_args() {
   printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
   printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
   printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
+  # Git identity and GitHub CLI auth
+  [[ -f "$_CLODE_HOME/.gitconfig" ]] && \
+    printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.gitconfig" "$_CLODE_HOME/.gitconfig"
+  [[ -d "$_CLODE_HOME/.config/gh" ]] && \
+    printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.config/gh" "$_CLODE_HOME/.config/gh"
+  # SSH agent forwarding — Docker Desktop for Mac exposes this socket
+  if [[ -S "/run/host-services/ssh-auth.sock" ]]; then
+    printf -- '-v\n/run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock\n'
+    printf -- '-e\nSSH_AUTH_SOCK=/run/host-services/ssh-auth.sock\n'
+  fi
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'
@@ -88,7 +98,20 @@ _clode_base_args() {
 }
 
 # ── Helpers ───────────────────────────────────────────────
-_clode_name()       { basename "$(pwd)"; }
+# Build a container name that's unique per worktree.
+# Inside .worktrees/: "project--branch" to avoid cross-project collisions.
+# Main worktree: plain project name.
+_clode_name() {
+  local dir
+  dir="$(pwd)"
+  if [[ "$dir" == */.worktrees/* ]]; then
+    local project
+    project=$(basename "${dir%%/.worktrees/*}")
+    printf '%s--%s' "$project" "$(basename "$dir")"
+  else
+    basename "$dir"
+  fi
+}
 _clode_is_running() { docker ps -q --filter "name=^${1}$" 2>/dev/null | grep -q .; }
 _clode_exists()     { docker ps -aq --filter "name=^${1}$" 2>/dev/null | grep -q .; }
 

@@ -3,6 +3,12 @@
 # ── Config ────────────────────────────────────────────────
 _CLODE_CONFIG="$HOME/.clode.config"
 _CLODE_HOME="$HOME"
+# Resolve the directory containing this script at source time
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+  _CLODE_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+else
+  _CLODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 _clode_load_config() {
   [[ -f "$_CLODE_CONFIG" ]] && source "$_CLODE_CONFIG"
@@ -54,12 +60,19 @@ _clode_base_args() {
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'
+  # Bind address for dev servers — must be 0.0.0.0 inside Docker for port
+  # mapping to work. Vite, CRA, and many Node servers read HOST automatically.
+  printf -- '-e\nHOST=0.0.0.0\n'
   # Mac Chrome CDP endpoint — available when Chrome is started with chrome-debug
   printf -- '-e\nCHROME_CDP_URL=http://host.docker.internal:9222\n'
   # Shared clipboard directory: 'cpaste' on Mac writes here; Claude reads /tmp/clode-clipboard inside Docker
   mkdir -p "$HOME/.clode/clipboard" 2>/dev/null || true
   printf -- '-v\n%s:/tmp/clode-clipboard\n' "$HOME/.clode/clipboard"
   printf -- '-v\n%s:/workspace\n' "$(pwd)"
+  # Inject Docker-environment instructions so Claude knows about 0.0.0.0, ports, etc.
+  if [[ -f "$_CLODE_DIR/CLAUDE.md" ]]; then
+    printf -- '-v\n%s:/workspace/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md"
+  fi
   printf -- '--name\n%s\n' "$name"
   printf -- '--label\nclode.workspace=%s\n' "$(pwd)"
   printf -- '--security-opt=no-new-privileges\n'

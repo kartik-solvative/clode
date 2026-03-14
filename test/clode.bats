@@ -213,3 +213,12 @@ _is_label() {
   run _clode_new "fix-auth"
   [ "$status" -ne 0 ]
 }
+
+# ── _clode_attach branching ───────────────────────────────
+
+@test "_clode_attach: errors when no containers running" {
+  _clode_running_for_path() { return 0; }  # outputs nothing
+  run _clode_attach
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no running container"* ]]
+}

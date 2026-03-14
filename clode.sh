@@ -426,13 +426,25 @@ _clode_start() {
 }
 
 _clode_attach() {
-  local name
-  name=$(_clode_name)
+  local -a names=()
+  while IFS= read -r _n; do [[ -n "$_n" ]] && names+=("$_n"); done \
+    < <(_clode_running_for_path)
 
-  if ! _clode_is_running "$name"; then
+  local count=${#names[@]}
+
+  if [[ $count -eq 0 ]]; then
     echo "clode: no running container for '$(pwd)'." >&2
     echo "       Run 'clode start' to begin a session." >&2
     return 1
+  fi
+
+  local name
+  if [[ $count -eq 1 ]]; then
+    name="${names[0]}"
+  else
+    if ! name=$(_clode_pick_container "${names[@]}"); then
+      return 1
+    fi
   fi
 
   echo "clode: attaching to '$name'"

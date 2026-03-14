@@ -46,6 +46,7 @@ type StateMsg *state.State
 type errMsg struct{ err error }
 type switchedMsg struct{}
 type refreshMsg struct{}
+type previewMsg struct{ content string }
 
 // Model is the root bubbletea model.
 type Model struct {
@@ -61,6 +62,7 @@ type Model struct {
 	prompt            *promptModel
 	palette           *paletteModel
 	errBanner         string
+	capturer          func(session string, windowIndex int) (string, error)
 }
 
 // New creates a Model from the given state. All nodes start collapsed.
@@ -110,6 +112,9 @@ func (m Model) PromptValue() string {
 // Cursor returns the current cursor position (for tests).
 func (m Model) Cursor() int { return m.cursor }
 
+// Preview returns the current preview content (for tests).
+func (m Model) Preview() string { return m.preview }
+
 // VisibleCount returns the number of visible rows (for tests).
 func (m Model) VisibleCount() int { return len(m.nodes) }
 
@@ -132,6 +137,36 @@ func (m Model) PreviewBreadcrumb() string {
 		return ""
 	}
 	return n.project + " › " + n.worktree + " › " + n.terminal.Name
+}
+
+// WithCapturer sets the function used to fetch live terminal previews.
+// fn should call tmux capture-pane for the given session and window index.
+func (m Model) WithCapturer(fn func(session string, windowIndex int) (string, error)) Model {
+	m.capturer = fn
+	return m
+}
+
+// fetchPreviewCmd returns a Cmd that fetches the preview for the selected terminal,
+// or nil if the cursor is not on a running terminal.
+func (m Model) fetchPreviewCmd() tea.Cmd {
+	if m.capturer == nil || m.cursor >= len(m.nodes) {
+		return nil
+	}
+	n := m.nodes[m.cursor]
+	if n.kind != nodeTerminal || n.terminal == nil ||
+		n.terminal.Status != state.StatusRunning || n.terminal.WindowIndex < 0 {
+		return nil
+	}
+	session := "cws-" + n.project
+	idx := n.terminal.WindowIndex
+	capture := m.capturer
+	return func() tea.Msg {
+		content, err := capture(session, idx)
+		if err != nil {
+			return previewMsg{""}
+		}
+		return previewMsg{content}
+	}
 }
 
 // WithPreselect expands and focuses the named project on startup.
@@ -158,6 +193,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StateMsg:
 		m.state = (*state.State)(msg)
 		m.nodes = buildNodes(m.state, m.expandedProjects, m.expandedWorktrees)
+		return m, m.fetchPreviewCmd()
+	case previewMsg:
+		m.preview = msg.content
 	case errMsg:
 		m.errBanner = msg.err.Error()
 	case switchedMsg, refreshMsg:
@@ -211,6 +249,7 @@ func (m Model) View() string {
 
 // dispatchKey handles key events in normal mode.
 func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	prevCursor := m.cursor
 	switch msg.Type {
 	case tea.KeyUp:
 		if m.cursor > 0 {
@@ -258,6 +297,11 @@ func (m Model) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.palette = newPaletteModel(contextActions(m))
 			}
 		}
+	}
+	// Clear stale preview and kick off a fresh fetch whenever the cursor moves.
+	if m.cursor != prevCursor {
+		m.preview = ""
+		return m, m.fetchPreviewCmd()
 	}
 	return m, nil
 }

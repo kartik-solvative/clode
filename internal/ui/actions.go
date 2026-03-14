@@ -38,6 +38,10 @@ func handleEnter(m Model) (tea.Model, tea.Cmd) {
 		case state.StatusRunning:
 			session := "cws-" + n.project
 			windowName := n.worktree + ":" + n.terminal.Name
+			if os.Getenv("TMUX") == "" {
+				// Running outside tmux: suspend the TUI and attach directly.
+				return m, attachSessionCmd(session, windowName)
+			}
 			return m, switchClientCmd(session, windowName)
 		case state.StatusDetached:
 			m.mode = modePrompt
@@ -75,33 +79,63 @@ func newDetachedPrompt(project, worktree string, t *state.Terminal) *promptModel
 	)
 }
 
-// switchClientCmd selects a window by name then switches the tmux client to the session.
-// /dev/tty inside a tmux pane is the internal pty, not the external client terminal,
-// so tmux cannot resolve the client from it. Instead we query list-clients (pure server
-// query — no TTY needed) to find the client attached to cws-ui, then use -c explicitly.
+// attachSessionCmd is used when cws-tui is running outside tmux. It selects the
+// target window then suspends the TUI and hands the terminal to tmux attach-session.
+// When the user detaches (Ctrl+b d), the TUI resumes.
+func attachSessionCmd(session, windowName string) tea.Cmd {
+	exec.Command("tmux", "select-window", "-t", session+":="+windowName).Run()
+	return tea.ExecProcess(
+		exec.Command("tmux", "attach-session", "-t", session),
+		func(err error) tea.Msg {
+			if err != nil {
+				return errMsg{err}
+			}
+			return refreshMsg{}
+		},
+	)
+}
+
+// resolveClient returns the name of the tmux client attached to the session
+// that contains $TMUX_PANE (i.e. the session running cws-tui). Falls back to
+// the first available client when the session cannot be determined.
+func resolveClient() (string, error) {
+	pane := os.Getenv("TMUX_PANE")
+	var mySession string
+	if pane != "" {
+		if out, err := exec.Command("tmux", "display-message", "-t", pane, "-p", "#{session_name}").Output(); err == nil {
+			mySession = strings.TrimSpace(string(out))
+		}
+	}
+	lcOut, err := exec.Command("tmux", "list-clients", "-F", "#{client_name} #{client_session}").Output()
+	if err != nil {
+		return "", fmt.Errorf("list-clients: %w", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(lcOut)), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		if mySession == "" || parts[1] == mySession {
+			return parts[0], nil
+		}
+	}
+	return "", fmt.Errorf("no client for %q (clients: %q)", mySession, strings.TrimSpace(string(lcOut)))
+}
+
+// switchClientCmd is used when cws-tui is running inside tmux ($TMUX is set).
+// It selects the target window then switches the current tmux client to the session.
+// The client is resolved by matching list-clients output against the session that
+// cws-tui itself is running in.
 func switchClientCmd(session, windowName string) tea.Cmd {
 	return func() tea.Msg {
-		// Step 1: select the window by exact name ("=" avoids ":" parsed as pane separator).
 		selectTarget := session + ":=" + windowName
 		if err := exec.Command("tmux", "select-window", "-t", selectTarget).Run(); err != nil {
 			return errMsg{fmt.Errorf("select-window %s: %w", selectTarget, err)}
 		}
-		// Step 2: resolve the client name via $TMUX_PANE.
-		// display-message -t <pane> -p queries the server for the client attached to
-		// that pane's session — works from a subprocess with no TTY or client context.
-		pane := os.Getenv("TMUX_PANE")
-		if pane == "" {
-			return errMsg{fmt.Errorf("$TMUX_PANE not set — run cws-tui via the cws shell function")}
-		}
-		out, err := exec.Command("tmux", "display-message", "-t", pane, "-p", "#{client_name}").Output()
+		client, err := resolveClient()
 		if err != nil {
-			return errMsg{fmt.Errorf("display-message: %w", err)}
+			return errMsg{err}
 		}
-		client := strings.TrimSpace(string(out))
-		if client == "" {
-			return errMsg{fmt.Errorf("no client for pane %s", pane)}
-		}
-		// Step 3: switch that client to the target session.
 		if err := exec.Command("tmux", "switch-client", "-c", client, "-t", session).Run(); err != nil {
 			return errMsg{fmt.Errorf("switch-client -c %s -t %s: %w", client, session, err)}
 		}
@@ -129,7 +163,6 @@ func fgReattachCmd(project, worktree, container string) tea.Cmd {
 	return func() tea.Msg {
 		session := "cws-" + project
 		windowName := worktree + ":clode-fg"
-		// Create new window running docker exec — each arg separate (no shell interpolation)
 		cmd := exec.Command("tmux", "new-window",
 			"-t", session,
 			"-n", windowName,
@@ -137,11 +170,15 @@ func fgReattachCmd(project, worktree, container string) tea.Cmd {
 			"claude", "--dangerously-skip-permissions", "--resume",
 		)
 		if err := cmd.Run(); err != nil {
+			return errMsg{fmt.Errorf("new-window: %w", err)}
+		}
+		client, err := resolveClient()
+		if err != nil {
 			return errMsg{err}
 		}
-		// Switch client to the session (tmux will focus the new window)
-		switchCmd := exec.Command("tmux", "switch-client", "-t", session)
-		switchCmd.Run()
+		if err := exec.Command("tmux", "switch-client", "-c", client, "-t", session).Run(); err != nil {
+			return errMsg{fmt.Errorf("switch-client -c %s -t %s: %w", client, session, err)}
+		}
 		return switchedMsg{}
 	}
 }

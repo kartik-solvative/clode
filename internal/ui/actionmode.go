@@ -72,13 +72,18 @@ func updateActionModeKey(m Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.nodes) {
 			n = m.nodes[m.cursor]
 		}
+		// Project nodes have no worktree; default to "main".
+		worktree := n.worktree
+		if worktree == "" {
+			worktree = "main"
+		}
 		switch msg.Runes[0] {
 		case 'n':
 			m.mode = modeNormal
-			return m, newHostTerminalCmd(n.project, n.worktree)
+			return m, newHostTerminalCmd(n.project, worktree)
 		case 'c':
 			m.mode = modeNormal
-			return m, newClodeTerminalCmd(n.project, n.worktree)
+			return m, newClodeTerminalCmd(n.project, worktree)
 		case 'w':
 			project := n.project
 			m.mode = modePrompt

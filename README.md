@@ -2,6 +2,12 @@
 
 Run [Claude Code](https://claude.ai/code) in a hardened Docker container with a single command. Your project files are mounted read-write; your SSH keys are mounted read-only; nothing else leaks out.
 
+> **This repo contains two independent tools:**
+> - **`clode`** — the core Docker wrapper for Claude Code (no extra dependencies)
+> - **`cws-tui`** — an optional terminal UI for managing multiple clode workspaces ([jump to cws-tui docs](#cws-tui--workspace-tui-optional))
+>
+> You can use `clode` without `cws-tui`. Install `cws-tui` only if you work across several projects simultaneously and want a visual overview.
+
 ## What is this?
 
 Claude Code normally runs with full access to your machine. `clode` wraps it in a Docker container with:
@@ -198,6 +204,98 @@ Or to change settings at the same time:
 clode update --reconfigure
 source ~/.zshrc
 ```
+
+---
+
+## cws-tui — Workspace TUI (optional)
+
+`cws-tui` is a standalone terminal UI for managing multiple clode workspaces at once. It is **not required** to use `clode` — install it only if you want a visual dashboard across projects.
+
+```
+┌─ workspaces ──────────────┬─ focusreader › main › clode-1 ──────────────────┐
+│ ▼ focusreader             │ live preview · 2s                                │
+│   ▼ main                  │                                                  │
+│     ● host-1              │ $ claude --dangerously-skip-permissions          │
+│     ● clode-1             │ ✻ Thinking…                                      │
+│ ▶ payments-api            │                                                  │
+│ ▶ my-webapp [no session]  │ ↵ jump into this terminal                        │
+└───────────────────────────┴──────────────────────────────────────────────────┘
+  ↑↓ navigate  ·  ↵ jump in  ·  Ctrl+A action  ·  space palette  ·  q quit
+```
+
+### What it does
+
+- Shows all your projects (git repos in `~/Projects/`) in a tree view
+- Green dot = terminal running · Yellow dot = clode container detached · no dot = stopped
+- Right pane shows a live capture of the selected terminal, refreshed every 2 seconds
+- Jump directly into any terminal with Enter; detach back with `Ctrl+b d`
+- Ctrl+A opens a context-sensitive action menu: new terminal, new worktree, fg a detached container, kill a project
+
+### Install cws-tui
+
+Requires [Go](https://go.dev/dl/) 1.16+.
+
+```bash
+# from the clode repo directory
+make install
+```
+
+This builds the binary and copies it to `~/bin/cws-tui`. Make sure `~/bin` is in your `PATH`.
+
+Or build manually:
+
+```bash
+go build -o ~/bin/cws-tui ./cmd/cws-tui
+```
+
+### Run
+
+```bash
+cws-tui
+```
+
+| Env var | Default | Description |
+|---|---|---|
+| `CWS_PROJECTS_DIR` | `~/Projects` | Directory scanned for git repos |
+| `CWS_SELECT_PROJECT` | — | Pre-select and expand a project on startup |
+| `CWS_SCRIPT` | `~/Projects/clode/clode-ws.sh` | Path to `clode-ws.sh` (for shell actions) |
+| `_CLODE_WS_ACTION_KEY` | `Ctrl+A` | Override the action menu trigger key |
+
+### Keyboard reference
+
+| Key | Action |
+|---|---|
+| `↑` `↓` | Navigate the tree |
+| `→` `←` | Expand / collapse a node |
+| `Enter` | Jump into terminal · expand project · create session if none |
+| `Ctrl+A` | Open action menu for the selected node |
+| `Space` | Open fuzzy command palette |
+| `q` | Quit |
+
+**Action menu (`Ctrl+A`) keys**
+
+| Key | Action |
+|---|---|
+| `n` | New host terminal in this worktree |
+| `c` | New clode terminal in this worktree |
+| `w` | New git worktree (prompts for branch name) |
+| `f` | Foreground a detached clode container |
+| `d` | Delete terminal |
+| `D` | Delete worktree |
+| `X` | Kill project (all sessions + containers) |
+| `Esc` | Cancel |
+
+### Relationship to clode
+
+`cws-tui` reads tmux session names and Docker container names that follow the `cws-*` convention used by `clode-ws.sh`. It does not depend on any clode internals and does not need to run inside a Docker container — it runs on your host machine, alongside clode.
+
+```
+clode          — runs Claude Code in Docker, one project at a time
+clode-ws.sh    — shell helpers: multi-worktree sessions, window naming
+cws-tui        — visual overview of everything clode-ws manages
+```
+
+---
 
 ## Troubleshooting
 

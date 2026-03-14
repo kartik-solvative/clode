@@ -41,7 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := ui.New(st)
+	m := ui.New(st).WithCapturer(tc.CapturePane)
 	if project := os.Getenv("CWS_SELECT_PROJECT"); project != "" {
 		m = m.WithPreselect(project)
 	}

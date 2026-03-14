@@ -231,3 +231,21 @@ _is_label() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"no container found"* ]]
 }
+
+# ── smart default branching ───────────────────────────────
+
+@test "smart default: calls _clode_start when no containers running" {
+  _clode_running_for_path() { return 0; }  # no output
+  _clode_start_called=0
+  _clode_start() { _clode_start_called=1; }
+  clode
+  [ "$_clode_start_called" -eq 1 ]
+}
+
+@test "smart default: calls _clode_attach when containers are running" {
+  _clode_running_for_path() { echo "myproject"; }
+  _clode_attach_called=0
+  _clode_attach() { _clode_attach_called=1; }
+  clode
+  [ "$_clode_attach_called" -eq 1 ]
+}

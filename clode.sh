@@ -241,6 +241,7 @@ USAGE
 
 SUBCOMMANDS
   start [--bg] [prompt]       Explicitly start a new session
+  new [label] [flags] [prompt]  Start an additional session in this directory
   attach                      Attach to running container (error if none)
   stop                        Stop and remove current project's container
   list [--all]                List running containers (--all includes stopped)
@@ -281,6 +282,9 @@ CLIPBOARD
 EXAMPLES
   clode                        Start or attach (smart default)
   clode start                  Explicitly start new session
+  clode new                    Start a second session (auto-named myproject-2)
+  clode new fix-auth           Start a second session labeled 'fix-auth'
+  clode new --bg "run tests"   Background session with no label
   clode start --bg "fix tests"      Run task in background
   clode -p 9000:9000                Add an extra port this session
   clode attach                 Attach to running session
@@ -632,16 +636,21 @@ clode() {
       shift
       _clode_update "${1:-}"
       ;;
+    new)
+      shift
+      _clode_new "$@"
+      ;;
     *)
-      # Smart default: attach if running, else start
-      local name
-      name=$(_clode_name)
-      if _clode_is_running "$name"; then
-        echo "clode: container '$name' is running — attaching"
-        _clode_attach
-      else
+      # Smart default: attach (with picker if 2+) if any running, else start new
+      local -a _names=()
+      while IFS= read -r _n; do [[ -n "$_n" ]] && _names+=("$_n"); done \
+        < <(_clode_running_for_path)
+      if [[ ${#_names[@]} -eq 0 ]]; then
         echo "clode: no running container — starting new session"
         _clode_start "$@"
+      else
+        echo "clode: container(s) running — attaching"
+        _clode_attach
       fi
       ;;
   esac

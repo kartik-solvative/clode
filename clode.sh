@@ -120,6 +120,43 @@ _clode_free_port() {
   python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)"
 }
 
+# List names of all RUNNING containers for the current directory (via clode.workspace label).
+# Outputs one name per line.
+_clode_running_for_path() {
+  docker ps --filter "label=clode.workspace=$(pwd)" --format '{{.Names}}' 2>/dev/null
+}
+
+# Return the next available container name for the current directory.
+#   _clode_next_name          -> <base>-2, <base>-3, … (never claims <base>)
+#   _clode_next_name <label>  -> <base>--<sanitized-label> (errors if taken)
+_clode_next_name() {
+  local base
+  base=$(_clode_name)
+
+  if [[ $# -gt 0 && -n "$1" ]]; then
+    # Labeled: sanitize then check availability.
+    # Note: '-' is placed first in the negated class to avoid being parsed as a range.
+    local label="$1"
+    label="${label//\//-}"
+    label="${label//[^-a-zA-Z0-9._]/-}"
+    local name="${base}--${label}"
+    if _clode_exists "$name"; then
+      echo "clode: container '$name' already exists." >&2
+      return 1
+    fi
+    echo "$name"
+  else
+    # Auto-numbered: start at <base>-2, never claim <base>
+    local n=2
+    local name="${base}-${n}"
+    while _clode_exists "$name"; do
+      n=$(( n + 1 ))
+      name="${base}-${n}"
+    done
+    echo "$name"
+  fi
+}
+
 # Populate globals from CLODE_EXPOSE_PORTS:
 #   _CLODE_PORT_ARGS   — docker -p host:container pairs
 #   _CLODE_PORT_EXTRA  — -e CLODE_PORT_<n>=<host> and --label clode.port.<n>=<host>

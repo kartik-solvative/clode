@@ -75,22 +75,17 @@ func newDetachedPrompt(project, worktree string, t *state.Terminal) *promptModel
 }
 
 // switchClientCmd switches the tmux client to "cws-<project>:<windowIndex>".
-// exec.Command has no controlling TTY, so tmux cannot detect the current client
-// automatically. We resolve the client name explicitly from the cws-ui session.
+// tmux needs a controlling TTY to identify which client to switch. exec.Command
+// children don't inherit one, so we open /dev/tty explicitly as stdin.
 func switchClientCmd(session string, windowIndex int) tea.Cmd {
 	return func() tea.Msg {
-		// Resolve the current tmux client name.
-		// display-message -p uses $TMUX to identify the client without needing a TTY.
-		out, err := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
-		if err != nil {
-			return errMsg{fmt.Errorf("display-message: %w", err)}
-		}
-		client := strings.TrimSpace(string(out))
-		if client == "" {
-			return errMsg{fmt.Errorf("could not determine tmux client")}
-		}
 		target := fmt.Sprintf("%s:%d", session, windowIndex)
-		cmd := exec.Command("tmux", "switch-client", "-c", client, "-t", target)
+		cmd := exec.Command("tmux", "switch-client", "-t", target)
+		// Give tmux a TTY so it can identify the current client.
+		if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+			cmd.Stdin = tty
+			defer tty.Close()
+		}
 		if err := cmd.Run(); err != nil {
 			return errMsg{fmt.Errorf("switch-client %s: %w", target, err)}
 		}

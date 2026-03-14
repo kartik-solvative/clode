@@ -291,6 +291,74 @@ EXAMPLES
 EOF
 }
 
+_clode_new() {
+  _clode_load_config
+
+  # Extract optional label (first arg matching label pattern)
+  local label=""
+  if [[ $# -gt 0 && "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]; then
+    label="$1"
+    shift
+  fi
+
+  local bg=0 resume=0 memory="4g" cpus="2"
+  local -a ports=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --bg)           bg=1;               shift ;;
+      --resume)       resume=1;           shift ;;
+      --memory)       memory="$2";        shift 2 ;;
+      --cpus)         cpus="$2";          shift 2 ;;
+      -p|--port)      ports+=("-p" "$2"); shift 2 ;;
+      *)              break ;;
+    esac
+  done
+
+  local name
+  if ! name=$(_clode_next_name "$label"); then
+    return 1
+  fi
+
+  local -a claude_flags=("--dangerously-skip-permissions")
+  [[ $resume -eq 1 ]] && claude_flags+=("--resume")
+
+  _clode_build_port_args
+  local -a _args=()
+  while IFS= read -r _line; do [[ -n "$_line" ]] && _args+=("$_line"); done \
+    < <(_clode_base_args "$name" "$memory" "$cpus")
+  local -a all_args=("${_args[@]}" "${_CLODE_PORT_ARGS[@]}" "${_CLODE_PORT_EXTRA[@]}" "${ports[@]}")
+
+  if [[ $bg -eq 1 ]]; then
+    docker run -d "${all_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+    echo "clode: started '$name' in background"
+    for line in "${_CLODE_PORT_LINES[@]}"; do echo "$line"; done
+
+    if [[ "${CLODE_IDLE_TIMEOUT:-0}" -gt 0 ]]; then
+      (
+        sleep "$CLODE_IDLE_TIMEOUT"
+        if _clode_is_running "$name"; then
+          docker stop "$name" >/dev/null 2>&1 && \
+            echo "clode: '$name' stopped after idle timeout (${CLODE_IDLE_TIMEOUT}s)"
+        fi
+      ) &
+      disown
+    fi
+
+    if [[ -n "${NTFY_TOPIC:-}" ]]; then
+      (docker wait "$name" >/dev/null 2>&1 && \
+        curl -s -o /dev/null "https://ntfy.sh/${NTFY_TOPIC}" \
+          -H "Title: clode done" \
+          -H "Tags: white_check_mark" \
+          -d "$name finished") &
+      disown
+    fi
+  else
+    echo "clode: starting '$name'"
+    for line in "${_CLODE_PORT_LINES[@]}"; do echo "$line"; done
+    docker run -it "${all_args[@]}" "$CLODE_IMAGE" "${claude_flags[@]}" "$@"
+  fi
+}
+
 _clode_start() {
   _clode_load_config
   local name

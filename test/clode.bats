@@ -138,3 +138,78 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"too many invalid"* ]]
 }
+
+# ── _clode_new label parsing ──────────────────────────────
+# Test the label-matching regex used inside _clode_new.
+# Pattern: ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$
+
+_is_label() {
+  [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]
+}
+
+@test "label pattern: simple word matches" {
+  run _is_label "fix-auth"
+  [ "$status" -eq 0 ]
+}
+
+@test "label pattern: slash-separated path matches" {
+  run _is_label "fix/auth"
+  [ "$status" -eq 0 ]
+}
+
+@test "label pattern: dot matches" {
+  run _is_label "feat.login"
+  [ "$status" -eq 0 ]
+}
+
+@test "label pattern: multi-word with space does not match" {
+  run _is_label "fix the bug"
+  [ "$status" -ne 0 ]
+}
+
+@test "label pattern: starts with dash does not match" {
+  run _is_label "-bad"
+  [ "$status" -ne 0 ]
+}
+
+@test "label pattern: empty string does not match" {
+  run _is_label ""
+  [ "$status" -ne 0 ]
+}
+
+# ── _clode_new ────────────────────────────────────────────
+
+@test "_clode_new: uses labeled name when label arg given" {
+  _clode_load_config() { :; }
+  _clode_build_port_args() { _CLODE_PORT_ARGS=(); _CLODE_PORT_EXTRA=(); _CLODE_PORT_LINES=(); }
+  # Output --name <name> so we can verify which name docker was called with
+  _clode_base_args() { printf -- '--name\n%s\n' "$1"; }
+  _clode_name() { echo "myproject"; }
+  _clode_exists() { return 1; }
+  docker_args=""
+  docker() { docker_args="$*"; }
+  CLODE_IMAGE="test-image"
+  _clode_new "fix-auth"
+  [[ "$docker_args" == *"myproject--fix-auth"* ]]
+}
+
+@test "_clode_new: uses auto-numbered name when first arg is not a label" {
+  _clode_load_config() { :; }
+  _clode_build_port_args() { _CLODE_PORT_ARGS=(); _CLODE_PORT_EXTRA=(); _CLODE_PORT_LINES=(); }
+  _clode_base_args() { printf -- '--name\n%s\n' "$1"; }
+  _clode_name() { echo "myproject"; }
+  _clode_exists() { return 1; }
+  docker_args=""
+  docker() { docker_args="$*"; }
+  CLODE_IMAGE="test-image"
+  # Multi-word arg doesn't match label pattern — should auto-number
+  _clode_new "fix the login bug"
+  [[ "$docker_args" == *"myproject-2"* ]]
+}
+
+@test "_clode_new: returns 1 when _clode_next_name fails" {
+  _clode_load_config() { :; }
+  _clode_next_name() { echo "clode: already exists" >&2; return 1; }
+  run _clode_new "fix-auth"
+  [ "$status" -ne 0 ]
+}

@@ -104,13 +104,29 @@ clode: starting 'my-app'
 
 Claude inside the container receives `CLODE_PORT_3000=54231` etc. as environment variables, so it knows which host URLs to report to you.
 
+### `clode new`
+
+```bash
+clode new [label]
+```
+
+Start a new container in the current project directory alongside any already-running sessions. The new container gets an auto-numbered name (`myproject-2`, `myproject-3`, …) or a labeled name if supplied.
+
+```bash
+clode new                  # auto-named: myproject-2
+clode new fix-auth         # labeled: myproject--fix-auth
+clode new --bg "run tests" # background, no label
+```
+
+When 2 or more sessions are running, `clode`, `clode attach`, and `clode stop` show a numbered picker to choose which session to interact with.
+
 ### `clode attach`
 
 ```bash
 clode attach
 ```
 
-Attach to the running container for the current directory. Errors if none is running.
+Attach to the running container for the current directory. Errors if none is running. Shows a numbered picker when multiple sessions are running.
 
 ### `clode stop`
 

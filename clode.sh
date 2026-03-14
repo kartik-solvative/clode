@@ -54,6 +54,8 @@ _clode_base_args() {
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'
+  # Mac Chrome CDP endpoint — available when Chrome is started with chrome-debug
+  printf -- '-e\nCHROME_CDP_URL=http://host.docker.internal:9222\n'
   # Shared clipboard directory: 'cpaste' on Mac writes here; Claude reads /tmp/clode-clipboard inside Docker
   mkdir -p "$HOME/.clode/clipboard" 2>/dev/null || true
   printf -- '-v\n%s:/tmp/clode-clipboard\n' "$HOME/.clode/clipboard"
@@ -130,6 +132,11 @@ PORTS
   host ports. Claude receives CLODE_PORT_<n>=<host_port> env vars so it
   knows the host-side URL. Run 'clode list' to see current mappings.
   Use -p to add extra ports beyond CLODE_EXPOSE_PORTS.
+
+BROWSER
+  chrome-debug                 Start Mac Chrome with CDP on port 9222
+                               Claude inside Docker connects via $CHROME_CDP_URL
+                               (Headless Chromium is also available inside Docker)
 
 CLIPBOARD (images)
   cpaste                       Save macOS clipboard image → /tmp/clode-clipboard/
@@ -348,6 +355,30 @@ clode() {
       fi
       ;;
   esac
+}
+
+# ── chrome-debug — start Mac Chrome with CDP for Docker access ────────────
+# Usage: chrome-debug [extra Chrome flags]
+# Claude inside Docker can connect via $CHROME_CDP_URL (http://host.docker.internal:9222)
+chrome-debug() {
+  local chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  if [[ ! -x "$chrome" ]]; then
+    echo "chrome-debug: Chrome not found at '$chrome'" >&2
+    return 1
+  fi
+  if curl -s --connect-timeout 1 "http://localhost:9222/json/version" >/dev/null 2>&1; then
+    echo "chrome-debug: Chrome CDP already listening on port 9222"
+    echo "              Connect from Docker via: http://host.docker.internal:9222"
+    return 0
+  fi
+  "$chrome" \
+    --remote-debugging-port=9222 \
+    --no-first-run \
+    --no-default-browser-check \
+    "$@" &
+  disown
+  echo "chrome-debug: Chrome started with CDP on port 9222"
+  echo "              Connect from Docker via: \$CHROME_CDP_URL"
 }
 
 # ── cpaste — clipboard image bridge ───────────────────────

@@ -169,7 +169,10 @@ func newClodeTerminalCmd(project, worktree string) tea.Cmd {
 // All arguments are shell-quoted to prevent injection.
 func shellHelperCmd(fn string, args ...string) tea.Cmd {
 	return func() tea.Msg {
-		cwsScript := filepath.Join(os.Getenv("HOME"), "Projects/clode/clode-ws.sh")
+		cwsScript := os.Getenv("CWS_SCRIPT")
+		if cwsScript == "" {
+			cwsScript = filepath.Join(os.Getenv("HOME"), "Projects/clode/clode-ws.sh")
+		}
 		parts := ". " + shellQuote(cwsScript) + " && " + fn
 		for _, a := range args {
 			parts += " " + shellQuote(a)

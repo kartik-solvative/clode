@@ -70,9 +70,9 @@ func NewReader(projectsDir string, tc *tmux.Client, dockerRunner tmux.Runner) *R
 // ContainerName returns the Docker container name for a clode terminal.
 // Convention mirrors _cws_container_name in clode-ws.sh:
 //
-//	"cws-<project>-<slug>-clode"
+//	"cws-<project>-<slug>"
 func ContainerName(project, slug string) string {
-	return fmt.Sprintf("cws-%s-%s-clode", project, slug)
+	return fmt.Sprintf("cws-%s-%s", project, slug)
 }
 
 // Read produces a fresh State snapshot.
@@ -191,13 +191,11 @@ func buildWorktrees(project string, windows []tmux.Window, containers map[string
 	// (A session exists but all windows for a slug were closed.)
 	// We need to scan containers for this project to find orphaned slugs.
 	prefix := fmt.Sprintf("cws-%s-", project)
-	suffix := "-clode"
 	for cname := range containers {
-		if !strings.HasPrefix(cname, prefix) || !strings.HasSuffix(cname, suffix) {
+		if !strings.HasPrefix(cname, prefix) {
 			continue
 		}
-		inner := cname[len(prefix) : len(cname)-len(suffix)]
-		slug := inner
+		slug := cname[len(prefix):]
 		if _, seen := bySlug[slug]; !seen {
 			slugOrder = append(slugOrder, slug)
 			bySlug[slug] = append(bySlug[slug], Terminal{

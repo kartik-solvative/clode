@@ -122,7 +122,7 @@ func TestDetectedDetachedTerminal(t *testing.T) {
 			"cws-focusreader": "0 main:host-1",
 		},
 	)
-	dockerRunner := fakeDockerRunner("cws-focusreader-main-clode")
+	dockerRunner := fakeDockerRunner("cws-focusreader-main")
 
 	dir := t.TempDir()
 	r := state.NewReader(dir, tmux.NewClient(tmuxRunner), dockerRunner)
@@ -150,7 +150,7 @@ func TestDetectedDetachedTerminal(t *testing.T) {
 	if detached.WindowIndex != -1 {
 		t.Errorf("detached terminal should have WindowIndex=-1, got %d", detached.WindowIndex)
 	}
-	if detached.Container != "cws-focusreader-main-clode" {
+	if detached.Container != "cws-focusreader-main" {
 		t.Errorf("detached terminal Container wrong: %q", detached.Container)
 	}
 }
@@ -159,8 +159,8 @@ func TestContainerNameConvention(t *testing.T) {
 	cases := []struct {
 		project, slug, want string
 	}{
-		{"focusreader", "main", "cws-focusreader-main-clode"},
-		{"payments-api", "feature-auth", "cws-payments-api-feature-auth-clode"},
+		{"focusreader", "main", "cws-focusreader-main"},
+		{"payments-api", "feature-auth", "cws-payments-api-feature-auth"},
 	}
 	for _, tc := range cases {
 		got := state.ContainerName(tc.project, tc.slug)

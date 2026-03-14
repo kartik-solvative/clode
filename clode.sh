@@ -264,9 +264,6 @@ _clode_list() {
   done < <(docker ps --filter "label=clode.workspace" \
     --format '{{.Names}}|{{.Label "clode.workspace"}}' 2>/dev/null)
 
-  printf "%-30s %-20s %s\n" "PROJECT" "CONTAINER" "STATUS"
-  printf "%-30s %-20s %s\n" "-------" "---------" "------"
-
   for dir in "$CLODE_WORKSPACE"/*/; do
     [[ -d "$dir" ]] || continue
     local project
@@ -278,17 +275,18 @@ _clode_list() {
     if [[ -n "$cname" ]]; then
       local status
       status=$(docker inspect --format '{{.State.Status}}' "$cname" 2>/dev/null || echo "unknown")
-      printf "%-30s %-20s %s\n" "$project" "$cname" "$status"
-      # Show port mappings from labels (clode.port.<container>=<host>)
+      # Collect ports as compact "host→cport" tokens on one line
+      local ports=""
       while IFS='=' read -r key hport; do
         [[ "$key" == clode.port.* ]] || continue
         local cport="${key#clode.port.}"
-        printf "  %-28s http://localhost:%-8s → container:%-s\n" "" "$hport" "$cport"
+        ports="${ports:+$ports  }:${hport}→${cport}"
       done < <(docker inspect --format \
         '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
         "$cname" 2>/dev/null | grep '^clode\.port\.')
+      printf "%-25s %-10s %s\n" "$project" "$status" "$ports"
     else
-      printf "%-30s %-20s %s\n" "$project" "-" "stopped"
+      printf "%-25s %s\n" "$project" "stopped"
     fi
   done
 }

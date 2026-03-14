@@ -106,13 +106,17 @@ func fgReattachCmd(project, worktree, container string) tea.Cmd {
 	return func() tea.Msg {
 		session := "cws-" + project
 		windowName := worktree + ":clode-fg"
-		// Create new window with docker exec
-		dockerArgs := fmt.Sprintf("docker exec -it %s claude --dangerously-skip-permissions --resume", shellQuote(container))
-		cmd := exec.Command("tmux", "new-window", "-t", session, "-n", windowName, dockerArgs)
+		// Create new window running docker exec — each arg separate (no shell interpolation)
+		cmd := exec.Command("tmux", "new-window",
+			"-t", session,
+			"-n", windowName,
+			"docker", "exec", "-it", container,
+			"claude", "--dangerously-skip-permissions", "--resume",
+		)
 		if err := cmd.Run(); err != nil {
 			return errMsg{err}
 		}
-		// Switch to the new window
+		// Switch client to the session (tmux will focus the new window)
 		switchCmd := exec.Command("tmux", "switch-client", "-t", session)
 		switchCmd.Run()
 		return switchedMsg{}

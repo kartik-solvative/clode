@@ -163,6 +163,11 @@ _cws_cmd_new() {
     return 1
   fi
 
+  if ! command -v cws-tui &>/dev/null; then
+    echo "cws-tui not found — run: make -C ~/Projects/clode install" >&2
+    return 1
+  fi
+
   local session
   session=$(_cws_session_name "$project")
 
@@ -454,11 +459,13 @@ cws() {
     echo "warning: tmux prefix is Ctrl+A — action mode (Ctrl+A) will not work." >&2
     echo "Change tmux prefix to Ctrl+B or set _CLODE_WS_ACTION_KEY. See clode-ws.sh." >&2
   fi
-  if tmux has-session -t cws-ui 2>/dev/null; then
-    tmux attach-session -t cws-ui
-  else
+  if ! tmux has-session -t cws-ui 2>/dev/null; then
     tmux new-session -d -s cws-ui -n cws-panel
     tmux send-keys -t cws-ui:cws-panel "cws-tui" Enter
+  fi
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t cws-ui
+  else
     tmux attach-session -t cws-ui
   fi
 }

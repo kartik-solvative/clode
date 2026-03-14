@@ -157,6 +157,59 @@ _clode_next_name() {
   fi
 }
 
+# Show a numbered picker for a list of container names.
+# Usage: _clode_pick_container name1 name2 …
+# Echoes the chosen name to stdout. Returns 1 on failure.
+# Uses ${CLODE_TTY:-/dev/tty} for input — set CLODE_TTY in tests only.
+_clode_pick_container() {
+  local names=("$@")
+  local n=${#names[@]}
+  local project
+  project=$(basename "$(pwd)")
+  local _tty="${CLODE_TTY:-/dev/tty}"
+
+  # Build a name->status map from running containers
+  local -A status_map
+  while IFS=$'\t' read -r cname cstatus; do
+    [[ -n "$cname" ]] && status_map["$cname"]="$cstatus"
+  done < <(docker ps --format '{{.Names}}\t{{.Status}}' 2>/dev/null)
+
+  # Print menu to stderr
+  echo "clode: multiple sessions for '${project}':" >&2
+  local i
+  for (( i=0; i<n; i++ )); do
+    local cname="${names[$i]}"
+    local cstatus="${status_map[$cname]:-stopped}"
+    printf '  %d) %-30s (%s)\n' "$(( i+1 ))" "$cname" "$cstatus" >&2
+  done
+
+  # Check tty is available
+  if ! true <"$_tty" 2>/dev/null; then
+    echo "clode: multiple sessions running for '${project}' — cannot pick non-interactively." >&2
+    echo "       Run from a terminal or stop containers manually." >&2
+    return 1
+  fi
+
+  local attempt=0
+  local choice
+  while [[ $attempt -lt 3 ]]; do
+    printf 'Attach to [1-%d]: ' "$n" >&2
+    if ! IFS= read -r choice <"$_tty" 2>/dev/null; then
+      echo "clode: failed to read from terminal." >&2
+      return 1
+    fi
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= n )); then
+      echo "${names[$(( choice - 1 ))]}"
+      return 0
+    fi
+    echo "clode: invalid selection '$choice' — enter a number between 1 and ${n}." >&2
+    attempt=$(( attempt + 1 ))
+  done
+
+  echo "clode: too many invalid attempts." >&2
+  return 1
+}
+
 # Populate globals from CLODE_EXPOSE_PORTS:
 #   _CLODE_PORT_ARGS   — docker -p host:container pairs
 #   _CLODE_PORT_EXTRA  — -e CLODE_PORT_<n>=<host> and --label clode.port.<n>=<host>

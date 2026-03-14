@@ -98,3 +98,43 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"already exists"* ]]
 }
+
+# ── _clode_pick_container ────────────────────────────────
+
+@test "_clode_pick_container: returns 1 when tty unavailable" {
+  docker() { return 0; }
+  export CLODE_TTY="/nonexistent/tty/$$"
+  run _clode_pick_container "myproject" "myproject-2"
+  unset CLODE_TTY
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot pick non-interactively"* ]]
+}
+
+@test "_clode_pick_container: echoes chosen name on valid selection" {
+  docker() {
+    printf 'myproject\tUp 2 hours\n'
+    printf 'myproject-2\tUp 5 minutes\n'
+  }
+  local tmpfile
+  tmpfile="$(mktemp)"
+  printf '2\n' > "$tmpfile"
+  export CLODE_TTY="$tmpfile"
+  run _clode_pick_container "myproject" "myproject-2"
+  unset CLODE_TTY
+  rm -f "$tmpfile"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"myproject-2"* ]]
+}
+
+@test "_clode_pick_container: returns 1 after 3 invalid inputs" {
+  docker() { return 0; }
+  local tmpfile
+  tmpfile="$(mktemp)"
+  printf 'x\nx\nx\n' > "$tmpfile"
+  export CLODE_TTY="$tmpfile"
+  run _clode_pick_container "myproject" "myproject-2"
+  unset CLODE_TTY
+  rm -f "$tmpfile"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"too many invalid"* ]]
+}

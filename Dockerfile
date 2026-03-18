@@ -25,7 +25,8 @@ RUN npx --yes playwright@latest install --with-deps chromium \
 
 # Create a non-root user for safer execution
 RUN useradd -m -u 1001 claude \
-    && chmod a+w /etc/passwd /etc/group
+    && chgrp claude /etc/passwd /etc/group \
+    && chmod g+w /etc/passwd /etc/group
 
 # Install Claude Code CLI globally
 RUN npm install -g @anthropic-ai/claude-code

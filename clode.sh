@@ -51,6 +51,9 @@ _clode_base_args() {
   touch "$_CLODE_HOME/.claude.json" 2>/dev/null || true
   printf -- '--rm\n'
   printf -- '-u\n%s\n' "$(id -u):$(id -g)"
+  # Add the claude group (GID 1001) as a supplementary group so the entrypoint
+  # can write to /etc/passwd (owned by group claude with g+w).
+  printf -- '--group-add\n1001\n'
   printf -- '-e\nHOME=%s\n' "$_CLODE_HOME"
   printf -- '-e\nCLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
   _clode_all_env_args
@@ -106,30 +109,48 @@ _clode_base_args() {
   # A worktree's .git file is a pointer to <main>/.git/worktrees/<name>, and the
   # object store / refs live in <main>/.git — without this mount, git is broken
   # inside the container (can't resolve the gitdir pointer).
-  if [[ "$_pwd" == */.worktrees/* ]]; then
-    local _main_root="${_pwd%%/.worktrees/*}"
-    # Mount main repo's .git so git can resolve the worktree gitdir pointer.
-    printf -- '-v\n%s/.git:%s/.git\n' "$_main_root" "$_main_root"
-    # Mount .worktrees/ itself so Claude can create sibling worktrees from inside
-    # the container. Without this, Docker creates .worktrees/ as a root-owned stub
-    # directory (an intermediate for the bind mount above) and writes into it fail.
-    printf -- '-v\n%s/.worktrees:%s/.worktrees\n' "$_main_root" "$_main_root"
+  # Uses git rev-parse --git-common-dir to detect worktrees reliably (not path substring).
+  local _git_common_dir _git_dir
+  _git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || true
+  _git_dir=$(git rev-parse --git-dir 2>/dev/null) || true
+  if [[ -n "$_git_common_dir" && -n "$_git_dir" && "$_git_common_dir" != "$_git_dir" ]]; then
+    # We're in a worktree; _git_common_dir is the main repo's .git
+    # Resolve to absolute path
+    _git_common_dir=$(cd "$_git_common_dir" && pwd)
+    local _main_root="${_git_common_dir%/.git}"
+    printf -- '-v\n%s:%s\n' "$_git_common_dir" "$_git_common_dir"
+    # Mount .worktrees/ so Claude can create sibling worktrees from inside the
+    # container. Without this, Docker creates it as a root-owned stub directory.
+    if [[ -d "$_main_root/.worktrees" ]]; then
+      printf -- '-v\n%s/.worktrees:%s/.worktrees\n' "$_main_root" "$_main_root"
+    fi
   fi
-  # Inject Docker-environment instructions at the workspace level so Claude always
-  # sees the Docker context, even when the project has its own CLAUDE.md.
-  # Claude Code loads CLAUDE.md hierarchically (cwd → root), so both files are
-  # read when a project-level CLAUDE.md also exists.
-  # Only skip if the user already has their own CLAUDE.md at that path on the host.
-  local _ws="${CLODE_WORKSPACE:-$HOME/Projects}"
-  if [[ -f "$_CLODE_DIR/CLAUDE.md" && ! -f "$_ws/CLAUDE.md" ]]; then
-    printf -- '-v\n%s:%s/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md" "$_ws"
-  fi
+  # Docker-environment instructions are injected via --append-system-prompt
+  # on the claude command (see _clode_claude_flags), not via file mounting.
   printf -- '--name\n%s\n' "$name"
   printf -- '--label\nclode.workspace=%s\n' "$(pwd)"
   printf -- '--security-opt=no-new-privileges\n'
   printf -- '--cap-drop=ALL\n'
   printf -- '--memory=%s\n' "$memory"
   printf -- '--cpus=%s\n' "$cpus"
+}
+
+# Build the base claude CLI flags (--dangerously-skip-permissions + Docker context).
+# Usage: local -a claude_flags=(); _clode_claude_flags claude_flags [--resume]
+_clode_claude_flags() {
+  # Populate a caller-provided array variable with the base claude CLI flags.
+  # Uses eval instead of nameref (local -n) for zsh compatibility.
+  local _varname="$1"
+  local _resume="${2:-}"
+  local -a _tmp=("--dangerously-skip-permissions")
+  [[ "$_resume" == "--resume" ]] && _tmp+=("--resume")
+  # Inject Docker-environment instructions directly into the system prompt.
+  # This is more reliable than file mounting — works regardless of project
+  # path, doesn't conflict with project CLAUDE.md, and is always active.
+  if [[ -f "$_CLODE_DIR/CLAUDE.md" ]]; then
+    _tmp+=("--append-system-prompt" "$(<"$_CLODE_DIR/CLAUDE.md")")
+  fi
+  eval "${_varname}=(\"\${_tmp[@]}\")"
 }
 
 # ── Helpers ───────────────────────────────────────────────
@@ -358,8 +379,10 @@ _clode_new() {
     return 1
   fi
 
-  local -a claude_flags=("--dangerously-skip-permissions")
-  [[ $resume -eq 1 ]] && claude_flags+=("--resume")
+  local _resume_flag=""
+  [[ $resume -eq 1 ]] && _resume_flag="--resume"
+  local -a claude_flags
+  _clode_claude_flags claude_flags "$_resume_flag"
 
   _clode_build_port_args
   local -a _args=()
@@ -421,8 +444,10 @@ _clode_start() {
     return 1
   fi
 
-  local -a claude_flags=("--dangerously-skip-permissions")
-  [[ $resume -eq 1 ]] && claude_flags+=("--resume")
+  local _resume_flag=""
+  [[ $resume -eq 1 ]] && _resume_flag="--resume"
+  local -a claude_flags
+  _clode_claude_flags claude_flags "$_resume_flag"
 
   _clode_build_port_args
   local -a _args=()

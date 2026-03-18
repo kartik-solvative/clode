@@ -62,11 +62,25 @@ _clode_base_args() {
     printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.gitconfig" "$_CLODE_HOME/.gitconfig"
   [[ -d "$_CLODE_HOME/.config/gh" ]] && \
     printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.config/gh" "$_CLODE_HOME/.config/gh"
+  # Extract the active gh token from the host (where macOS Keychain is accessible)
+  # and inject it as GH_TOKEN. Inside Docker there is no Keychain, so the mounted
+  # ~/.config/gh credentials file alone is insufficient. GH_TOKEN env var takes
+  # precedence over the credential store, so this works even with stale file tokens.
+  local _gh_token
+  _gh_token=$(gh auth token 2>/dev/null || true)
+  [[ -n "$_gh_token" ]] && printf -- '-e\nGH_TOKEN=%s\n' "$_gh_token"
   # SSH agent forwarding — Docker Desktop for Mac exposes this socket
   if [[ -S "/run/host-services/ssh-auth.sock" ]]; then
     printf -- '-v\n/run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock\n'
     printf -- '-e\nSSH_AUTH_SOCK=/run/host-services/ssh-auth.sock\n'
   fi
+  # Rewrite GitHub push URLs to SSH so the forwarded SSH agent handles auth.
+  # macOS credential helpers (gh, GCM) store tokens in the Keychain, which is
+  # inaccessible inside Docker — SSH agent forwarding is the reliable alternative.
+  # pushInsteadOf only affects push; fetch/clone continue to use HTTPS.
+  printf -- '-e\nGIT_CONFIG_COUNT=1\n'
+  printf -- '-e\nGIT_CONFIG_KEY_0=url.git@github.com:.pushInsteadOf\n'
+  printf -- '-e\nGIT_CONFIG_VALUE_0=https://github.com/\n'
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'
@@ -85,9 +99,27 @@ _clode_base_args() {
   _pwd="$(pwd)"
   printf -- '-v\n%s:%s\n' "$_pwd" "$_pwd"
   printf -- '-w\n%s\n' "$_pwd"
-  # Inject Docker-environment instructions — only if project has no CLAUDE.md of its own.
-  if [[ -f "$_CLODE_DIR/CLAUDE.md" && ! -f "$_pwd/CLAUDE.md" ]]; then
-    printf -- '-v\n%s:%s/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md" "$_pwd"
+  # When running inside a git worktree, also mount the main repo's .git directory.
+  # A worktree's .git file is a pointer to <main>/.git/worktrees/<name>, and the
+  # object store / refs live in <main>/.git — without this mount, git is broken
+  # inside the container (can't resolve the gitdir pointer).
+  if [[ "$_pwd" == */.worktrees/* ]]; then
+    local _main_root="${_pwd%%/.worktrees/*}"
+    # Mount main repo's .git so git can resolve the worktree gitdir pointer.
+    printf -- '-v\n%s/.git:%s/.git\n' "$_main_root" "$_main_root"
+    # Mount .worktrees/ itself so Claude can create sibling worktrees from inside
+    # the container. Without this, Docker creates .worktrees/ as a root-owned stub
+    # directory (an intermediate for the bind mount above) and writes into it fail.
+    printf -- '-v\n%s/.worktrees:%s/.worktrees\n' "$_main_root" "$_main_root"
+  fi
+  # Inject Docker-environment instructions at the workspace level so Claude always
+  # sees the Docker context, even when the project has its own CLAUDE.md.
+  # Claude Code loads CLAUDE.md hierarchically (cwd → root), so both files are
+  # read when a project-level CLAUDE.md also exists.
+  # Only skip if the user already has their own CLAUDE.md at that path on the host.
+  local _ws="${CLODE_WORKSPACE:-$HOME/Projects}"
+  if [[ -f "$_CLODE_DIR/CLAUDE.md" && ! -f "$_ws/CLAUDE.md" ]]; then
+    printf -- '-v\n%s:%s/CLAUDE.md:ro\n' "$_CLODE_DIR/CLAUDE.md" "$_ws"
   fi
   printf -- '--name\n%s\n' "$name"
   printf -- '--label\nclode.workspace=%s\n' "$(pwd)"

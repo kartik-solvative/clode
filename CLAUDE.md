@@ -18,17 +18,33 @@ automatically. For frameworks that don't, always pass the explicit flag:
 | FastAPI/uvicorn | `uvicorn main:app --host 0.0.0.0 --port <port>` |
 | Express / Node | `app.listen(port, '0.0.0.0')` |
 
-## Port mapping
+## Port mapping — CRITICAL
 
-Each container port listed in `CLODE_EXPOSE_PORTS` is mapped to a dynamic
-host port. The env var `CLODE_PORT_<n>` tells you the host-side port:
+This container only has a few ports forwarded to the host Mac. **You MUST
+use one of these ports for ANY server you start** — random/arbitrary ports
+are completely inaccessible from the host.
 
-- `CLODE_PORT_3000` → host port for container port 3000
-- `CLODE_PORT_5173` → host port for container port 5173
-- etc.
+Available container ports (check env vars to confirm):
+- **3000** → `$CLODE_PORT_3000`
+- **5173** → `$CLODE_PORT_5173`
+- **8080** → `$CLODE_PORT_8080`
+- **8888** → `$CLODE_PORT_8888`
 
-When you start a server, tell the user the correct URL:
-`http://localhost:$CLODE_PORT_3000` (not `localhost:3000`).
+### Rules
+
+1. **Always pass an explicit port** to any server, script, or tool you start.
+   Never let a tool pick a random port — it won't be reachable.
+2. **Use `--port`, `-p`, or the tool's port flag** to force one of the above.
+3. **Tell the user the host URL**, not the container URL:
+   `http://localhost:$CLODE_PORT_3000` (not `localhost:3000`).
+4. If you need multiple servers simultaneously, use different mapped ports
+   (e.g., app on 3000, API on 8080, docs on 8888).
+5. **If a tool/script picks a random port** and you can't override it, proxy
+   it through a mapped port:
+   ```bash
+   socat TCP-LISTEN:8080,fork,reuseaddr,bind=0.0.0.0 TCP:localhost:<random-port> &
+   ```
+   Then tell the user: `http://localhost:$CLODE_PORT_8080`
 
 ## Clipboard
 

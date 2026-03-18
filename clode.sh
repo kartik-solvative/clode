@@ -81,6 +81,9 @@ _clode_base_args() {
   printf -- '-e\nGIT_CONFIG_COUNT=1\n'
   printf -- '-e\nGIT_CONFIG_KEY_0=url.git@github.com:.pushInsteadOf\n'
   printf -- '-e\nGIT_CONFIG_VALUE_0=https://github.com/\n'
+  # Ensure host.docker.internal resolves inside the container — Docker Desktop
+  # provides this automatically, but Colima and other runtimes need the flag.
+  printf -- '--add-host\nhost.docker.internal:host-gateway\n'
   # ~/.claude is already mounted above; just point the bridge at the Mac host
   # so PermissionRequest/Notification hooks reach Nod via host.docker.internal
   printf -- '-e\nNOD_HOST=host.docker.internal\n'

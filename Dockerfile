@@ -2,7 +2,7 @@ FROM node:20-slim
 
 # Install system dependencies + GitHub CLI
 RUN apt-get update && apt-get install -y \
-    git openssh-client bash curl python3 dumb-init \
+    git openssh-client bash curl python3 dumb-init socat \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \

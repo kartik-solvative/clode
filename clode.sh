@@ -58,7 +58,7 @@ _clode_base_args() {
   printf -- '-e\nCLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
   _clode_all_env_args
   printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
-  printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
+  printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
   printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
   # Git identity and GitHub CLI auth
   [[ -f "$_CLODE_HOME/.gitconfig" ]] && \

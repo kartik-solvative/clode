@@ -58,7 +58,10 @@ _clode_base_args() {
   printf -- '-e\nCLAUDE_CODE_OAUTH_TOKEN=%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}"
   _clode_all_env_args
   printf -- '-v\n%s:%s\n' "$_CLODE_HOME/.claude" "$_CLODE_HOME/.claude"
-  printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.claude.json" "$_CLODE_HOME/.claude.json"
+  # .claude.json is NOT mounted — it contains user prefs that Claude Code writes
+  # to during normal operation. Sharing it via bind mount between host and multiple
+  # containers causes corruption from concurrent writes. The container gets auth via
+  # CLAUDE_CODE_OAUTH_TOKEN and session data via ~/.claude/; it doesn't need this file.
   printf -- '-v\n%s:%s:ro\n' "$_CLODE_HOME/.ssh" "$_CLODE_HOME/.ssh"
   # Git identity and GitHub CLI auth
   [[ -f "$_CLODE_HOME/.gitconfig" ]] && \
